@@ -39,6 +39,11 @@ class CollectionItem extends vscode.TreeItem {
         this.contextValue = 'litedbCollection';
         this.iconPath = new vscode.ThemeIcon('table');
         this.description = 'collection';
+        this.command = {
+            command: 'litedb.openCollection',
+            title: 'Open Collection',
+            arguments: [this]
+        };
     }
 }
 
@@ -112,7 +117,7 @@ async function runBridge<T>(extensionPath: string, payload: unknown): Promise<Br
     });
 }
 
-function renderTable(query: string, result: QueryResult): string {
+function renderTable(title: string, subtitleLabel: string, subtitleValue: string, result: QueryResult): string {
     const escapeHtml = (value: unknown): string => String(value ?? '')
         .replace(/&/g, '&amp;')
         .replace(/</g, '&lt;')
@@ -129,21 +134,68 @@ function renderTable(query: string, result: QueryResult): string {
 <head>
 <meta charset="utf-8" />
 <style>
-body { font-family: sans-serif; padding: 12px; }
-table { border-collapse: collapse; width: 100%; }
-th, td { border: 1px solid #999; padding: 6px; text-align: left; vertical-align: top; }
-th { background: #eee; }
-code { background: #f4f4f4; padding: 2px 4px; }
+body {
+    color: var(--vscode-editor-foreground);
+    background: var(--vscode-editor-background);
+    font-family: var(--vscode-font-family);
+    font-size: var(--vscode-font-size);
+    margin: 0;
+    padding: 16px;
+}
+h2 {
+    margin: 0 0 8px;
+    font-size: 1.4em;
+}
+.meta {
+    margin: 0 0 12px;
+}
+code {
+    background: var(--vscode-textCodeBlock-background);
+    border: 1px solid var(--vscode-panel-border);
+    border-radius: 4px;
+    padding: 2px 6px;
+}
+.table-wrap {
+    border: 1px solid var(--vscode-panel-border);
+    border-radius: 6px;
+    overflow: hidden;
+}
+table {
+    border-collapse: collapse;
+    width: 100%;
+}
+th, td {
+    border-bottom: 1px solid var(--vscode-panel-border);
+    padding: 8px;
+    text-align: left;
+    vertical-align: top;
+}
+th {
+    position: sticky;
+    top: 0;
+    background: var(--vscode-editorGroupHeader-tabsBackground);
+    color: var(--vscode-editor-foreground);
+    font-weight: 600;
+}
+tbody tr:hover {
+    background: var(--vscode-list-hoverBackground);
+}
+.empty {
+    padding: 12px;
+    color: var(--vscode-descriptionForeground);
+}
 </style>
 </head>
 <body>
-<h2>LiteDB Query Result</h2>
-<p><strong>Query:</strong> <code>${escapeHtml(query)}</code></p>
-<p><strong>Rows:</strong> ${result.rows.length}</p>
+<h2>${escapeHtml(title)}</h2>
+<p class="meta"><strong>${escapeHtml(subtitleLabel)}:</strong> <code>${escapeHtml(subtitleValue)}</code></p>
+<p class="meta"><strong>Rows:</strong> ${result.rows.length}</p>
+<div class="table-wrap">
 <table>
 <thead><tr>${header}</tr></thead>
-<tbody>${rows}</tbody>
+<tbody>${rows || `<tr><td class="empty" colspan="${Math.max(result.columns.length, 1)}">No rows returned.</td></tr>`}</tbody>
 </table>
+</div>
 </body>
 </html>`;
 }
@@ -231,7 +283,40 @@ export function activate(context: vscode.ExtensionContext): void {
             {}
         );
 
-        panel.webview.html = renderTable(query, response.data);
+        panel.webview.html = renderTable('LiteDB Query Result', 'Query', query, response.data);
+    }));
+
+    context.subscriptions.push(vscode.commands.registerCommand('litedb.openCollection', async (collection: CollectionItem) => {
+        if (!state.dbPath) {
+            vscode.window.showWarningMessage('Open a LiteDB database first.');
+            return;
+        }
+
+        if (!collection || !collection.name) {
+            vscode.window.showWarningMessage('Unable to open the selected collection.');
+            return;
+        }
+
+        const query = `SELECT * FROM ${collection.name}`;
+        const response = await runBridge<QueryResult>(context.extensionPath, {
+            command: 'query',
+            dbPath: state.dbPath,
+            query
+        });
+
+        if (!response.success || !response.data) {
+            vscode.window.showErrorMessage(`Unable to open collection \"${collection.name}\": ${response.error ?? 'Unknown error'}`);
+            return;
+        }
+
+        const panel = vscode.window.createWebviewPanel(
+            'litedbCollectionResult',
+            `LiteDB: ${collection.name}`,
+            vscode.ViewColumn.One,
+            {}
+        );
+
+        panel.webview.html = renderTable(`Collection: ${collection.name}`, 'Collection', collection.name, response.data);
     }));
 }
 

@@ -14,6 +14,7 @@
     "onCommand:litedb.openDatabase",
     "onCommand:litedb.closeDatabase",
     "onCommand:litedb.runQuery",
+    "onCommand:litedb.openCollection",
     "onView:litedbExplorer"
   ],
   "main": "./out/extension.js",
@@ -34,6 +35,10 @@
       {
         "command": "litedb.refreshCollections",
         "title": "LiteDB: Refresh Collections"
+      },
+      {
+        "command": "litedb.openCollection",
+        "title": "LiteDB: Open Collection"
       }
     ],
     "views": {
