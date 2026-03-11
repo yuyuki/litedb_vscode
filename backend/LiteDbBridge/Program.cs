@@ -1,5 +1,9 @@
-using System.Text.Json;
 using LiteDB;
+
+// alias System.Text.Json classes to avoid conflict with LiteDB.JsonSerializer
+using JsonSerializer = System.Text.Json.JsonSerializer;
+using JsonSerializerOptions = System.Text.Json.JsonSerializerOptions;
+using JsonNamingPolicy = System.Text.Json.JsonNamingPolicy;
 
 public sealed record BridgeRequest(string Command, string DbPath, string? Query);
 public sealed record BridgeResponse(bool Success, object? Data = null, string? Error = null);
@@ -16,7 +20,8 @@ public static class Program
                 return 1;
             }
 
-            var request = JsonSerializer.Deserialize<BridgeRequest>(args[0], new JsonSerializerOptions
+// deserialize using System.Text.Json (alias avoids ambiguity with LiteDB.JsonSerializer)
+        var request = JsonSerializer.Deserialize<BridgeRequest>(args[0], new JsonSerializerOptions
             {
                 PropertyNameCaseInsensitive = true
             });
@@ -64,10 +69,27 @@ public static class Program
         }
 
         using var db = new LiteDatabase(request.DbPath);
-        var result = db.Execute(request.Query);
-        var rows = result.Select(doc => doc.RawValue.AsDocument)
-            .Select(doc => doc.Keys.ToDictionary(k => k, k => BsonMapper.Global.Serialize(doc[k]).RawValue?.ToString() ?? string.Empty))
-            .Cast<IDictionary<string, string>>()
+        // execute query and convert to list to simplify LINQ usage
+        var result = db.Execute(request.Query).ToList();
+
+        // convert each element to a BsonDocument (some results come as BsonValue)
+        var docs = result.Select(x => x switch
+        {
+            BsonDocument d => d,
+            BsonValue v when v.IsDocument => v.AsDocument,
+            _ => new BsonDocument()
+        }).ToList();
+
+        var rows = docs
+            .Select(doc =>
+            {
+                var dict = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+                foreach (var k in doc.Keys)
+                {
+                    dict[k] = BsonMapper.Global.Serialize(doc[k]).RawValue?.ToString() ?? string.Empty;
+                }
+                return (IDictionary<string,string>)dict;
+            })
             .ToList();
 
         var columns = rows
