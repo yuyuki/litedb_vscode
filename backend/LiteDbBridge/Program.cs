@@ -69,27 +69,10 @@ public static class Program
         }
 
         using var db = new LiteDatabase(request.DbPath);
-        // execute query and convert to list to simplify LINQ usage
+        // execute query and normalize records into grid rows
         var result = db.Execute(request.Query).ToList();
-
-        // convert each element to a BsonDocument (some results come as BsonValue)
-        var docs = result.Select(x => x switch
-        {
-            BsonDocument d => d,
-            BsonValue v when v.IsDocument => v.AsDocument,
-            _ => new BsonDocument()
-        }).ToList();
-
-        var rows = docs
-            .Select(doc =>
-            {
-                var dict = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-                foreach (var k in doc.Keys)
-                {
-                    dict[k] = BsonMapper.Global.Serialize(doc[k]).RawValue?.ToString() ?? string.Empty;
-                }
-                return (IDictionary<string,string>)dict;
-            })
+        var rows = result
+            .SelectMany(ExpandToRows)
             .ToList();
 
         var columns = rows
@@ -103,6 +86,76 @@ public static class Program
             rows
         }));
         return 0;
+    }
+
+    private static IEnumerable<IDictionary<string, string>> ExpandToRows(BsonValue value)
+    {
+        if (value.IsDocument)
+        {
+            return ExpandDocument(value.AsDocument);
+        }
+
+        if (value.IsArray)
+        {
+            return value.AsArray.SelectMany(ExpandToRows);
+        }
+
+        return new[] { new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["value"] = ToDisplayString(value) } };
+    }
+
+    private static IEnumerable<IDictionary<string, string>> ExpandDocument(BsonDocument doc)
+    {
+        if (doc.Count == 1)
+        {
+            var first = doc.First();
+            if (first.Value.IsArray)
+            {
+                return first.Value.AsArray.SelectMany(ExpandToRows);
+            }
+        }
+
+        var row = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var key in doc.Keys)
+        {
+            row[key] = ToDisplayString(doc[key]);
+        }
+
+        return new[] { (IDictionary<string, string>)row };
+    }
+
+    private static string ToDisplayString(BsonValue value)
+    {
+        if (value.IsNull)
+        {
+            return string.Empty;
+        }
+
+        if (value.IsArray || value.IsDocument)
+        {
+            return JsonSerializer.Serialize(ToNative(value));
+        }
+
+        return BsonMapper.Global.Serialize(value).RawValue?.ToString() ?? string.Empty;
+    }
+
+    private static object? ToNative(BsonValue value)
+    {
+        if (value.IsNull)
+        {
+            return null;
+        }
+
+        if (value.IsDocument)
+        {
+            return value.AsDocument.ToDictionary(kvp => kvp.Key, kvp => ToNative(kvp.Value));
+        }
+
+        if (value.IsArray)
+        {
+            return value.AsArray.Select(ToNative).ToArray();
+        }
+
+        return BsonMapper.Global.Serialize(value).RawValue;
     }
 
     private static void Write(BridgeResponse response)
