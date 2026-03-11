@@ -1,0 +1,82 @@
+{
+  "name": "litedb-vscode",
+  "displayName": "LiteDB Explorer",
+  "description": "Open LiteDB files, browse collections, and run queries from VS Code.",
+  "version": "0.0.1",
+  "publisher": "local",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onCommand:litedb.openDatabase",
+    "onCommand:litedb.closeDatabase",
+    "onCommand:litedb.runQuery",
+    "onView:litedbExplorer"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "litedb.openDatabase",
+        "title": "LiteDB: Open Database"
+      },
+      {
+        "command": "litedb.closeDatabase",
+        "title": "LiteDB: Close Database"
+      },
+      {
+        "command": "litedb.runQuery",
+        "title": "LiteDB: Run Query"
+      },
+      {
+        "command": "litedb.refreshCollections",
+        "title": "LiteDB: Refresh Collections"
+      }
+    ],
+    "views": {
+      "explorer": [
+        {
+          "id": "litedbExplorer",
+          "name": "LiteDB"
+        }
+      ]
+    },
+    "menus": {
+      "view/title": [
+        {
+          "command": "litedb.openDatabase",
+          "when": "view == litedbExplorer",
+          "group": "navigation@1"
+        },
+        {
+          "command": "litedb.closeDatabase",
+          "when": "view == litedbExplorer",
+          "group": "navigation@2"
+        },
+        {
+          "command": "litedb.refreshCollections",
+          "when": "view == litedbExplorer",
+          "group": "navigation@3"
+        },
+        {
+          "command": "litedb.runQuery",
+          "when": "view == litedbExplorer",
+          "group": "navigation@4"
+        }
+      ]
+    }
+  },
+  "scripts": {
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "vscode:prepublish": "npm run compile"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.19",
+    "@types/vscode": "^1.85.0",
+    "typescript": "^5.3.3"
+  }
+}
