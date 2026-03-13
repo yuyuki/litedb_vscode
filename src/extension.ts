@@ -363,33 +363,13 @@ export function activate(context: vscode.ExtensionContext): void {
             return;
         }
 
-        const query = await vscode.window.showInputBox({
-            prompt: 'Enter a LiteDB SQL query (e.g. SELECT * FROM customers LIMIT 20)'
+        // Create a new untitled document with LiteDB language
+        const doc = await vscode.workspace.openTextDocument({
+            language: 'litedb',
+            content: '-- Enter your LiteDB SQL query here\n-- Example: SELECT * FROM customers LIMIT 20\n\n'
         });
 
-        if (!query) {
-            return;
-        }
-
-        const response = await runBridge<QueryResult>(context.extensionPath, {
-            command: 'query',
-            dbPath: state.dbPath,
-            query
-        });
-
-        if (!response.success || !response.data) {
-            vscode.window.showErrorMessage(`Query failed: ${response.error ?? 'Unknown error'}`);
-            return;
-        }
-
-        const panel = vscode.window.createWebviewPanel(
-            'litedbQueryResult',
-            'LiteDB Query Result',
-            vscode.ViewColumn.One,
-            {}
-        );
-
-        panel.webview.html = renderTable('LiteDB Query Result', 'Query', query, response.data);
+        await vscode.window.showTextDocument(doc, vscode.ViewColumn.One);
     }));
 
     context.subscriptions.push(vscode.commands.registerCommand('litedb.openCollection', async (collection: CollectionItem) => {

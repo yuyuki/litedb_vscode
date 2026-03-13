@@ -19,6 +19,19 @@
   ],
   "main": "./out/extension.js",
   "contributes": {
+    "languages": [
+      {
+        "id": "litedb",
+        "aliases": [
+          "LiteDB",
+          "litedb"
+        ],
+        "extensions": [
+          ".litedb"
+        ],
+        "configuration": "./language-configuration.json"
+      }
+    ],
     "commands": [
       {
         "command": "litedb.openDatabase",
@@ -87,5 +100,9 @@
     "@types/node": "^20.11.19",
     "@types/vscode": "^1.85.0",
     "typescript": "^5.3.3"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yuyuki/litedb_vscode.git"
   }
 }

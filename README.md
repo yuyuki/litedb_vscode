@@ -13,10 +13,10 @@ This extension prototype provides:
 
 ## Commands
 
-- `LiteDB: Open Database`
-- `LiteDB: Close Database`
-- `LiteDB: Run Query`
-- `LiteDB: Refresh Collections`
+- `Open Database`
+- `Close Database`
+- `Run Query`
+- `Refresh Collections`
 
 ## How it works
 
@@ -65,10 +65,10 @@ The VS Code extension (TypeScript) launches a small .NET bridge app that referen
 
 1. In the Extension Development Host window, open the Command Palette (`Ctrl+Shift+P`)
 2. Type "LiteDB" to see available commands:
-   - `LiteDB: Open Database`
-   - `LiteDB: Close Database`
-   - `LiteDB: Run Query`
-   - `LiteDB: Refresh Collections`
+   - `Open Database`
+   - `Close Database`
+   - `Run Query`
+   - `Refresh Collections`
 
 3. Check the Explorer panel (left sidebar) for the "LiteDB" section
 
