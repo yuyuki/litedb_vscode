@@ -10,5 +10,20 @@
 			"problemMatcher": [],
 			"group": "build"
 		}
+,
+		{
+			"label": "npm: compile",
+			"type": "shell",
+			"command": "npm run compile",
+			"group": "build",
+			"problemMatcher": []
+		},
+		{
+			"label": "dotnet: build",
+			"type": "shell",
+			"command": "dotnet build",
+			"group": "build",
+			"problemMatcher": []
+		}
 	]
 }

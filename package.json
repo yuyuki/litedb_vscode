@@ -57,6 +57,12 @@
         "command": "litedb.openCollection",
         "title": "Open Collection"
       }
+      ,
+      {
+        "command": "litedb.help",
+        "title": "Help",
+        "icon": "$(question)"
+      }
     ],
     "views": {
       "explorer": [
@@ -64,8 +70,31 @@
           "id": "litedbExplorer",
           "name": "LiteDB"
         }
+      ],
+      "litedbPanel": [
+        {
+          "type": "webview",
+          "id": "litedbResultView",
+          "name": "LiteDB Result"
+        }
       ]
     },
+    "viewsContainers": {
+      "panel": [
+        {
+          "id": "litedbPanel",
+          "title": "LiteDB result",
+          "icon": "$(database)"
+        }
+      ]
+    },
+    "keybindings": [
+      {
+        "command": "litedb.executeScript",
+        "key": "f5",
+        "when": "editorLangId == litedb || resourceExtname == .litedb"
+      }
+    ],
     "menus": {
       "view/title": [
         {
@@ -87,6 +116,12 @@
           "command": "litedb.runQuery",
           "when": "view == litedbExplorer",
           "group": "navigation@4"
+        }
+        ,
+        {
+          "command": "litedb.help",
+          "when": "view == litedbExplorer",
+          "group": "navigation@5"
         }
       ]
     }

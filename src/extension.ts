@@ -1,3 +1,15 @@
+// LiteDB SQL keywords and classes for completion
+const LITEDB_KEYWORDS = [
+    // SQL-like keywords
+    'SELECT', 'FROM', 'WHERE', 'INSERT', 'INTO', 'VALUES', 'UPDATE', 'SET', 'DELETE', 'DROP', 'COLLECTION', 'RENAME', 'TO',
+    // Functions
+    'COUNT', 'LOWER', 'LENGTH',
+    // LiteDB classes/interfaces
+    'LiteDatabase', 'LiteCollection', 'LiteQueryable',
+    // Other useful
+    'ORDER BY', 'GROUP BY', 'LIMIT', 'OFFSET', 'DISTINCT', 'ASC', 'DESC', 'AND', 'OR', 'NOT', 'NULL', 'TRUE', 'FALSE'
+];
+
 import * as vscode from 'vscode';
 import * as path from 'path';
 import { spawn } from 'child_process';
@@ -79,6 +91,60 @@ class LiteDbCollectionsProvider implements vscode.TreeDataProvider<CollectionIte
         }
 
         return response.data.map((name) => new CollectionItem(name));
+    }
+}
+
+class LiteDbResultViewProvider implements vscode.WebviewViewProvider {
+    private _view?: vscode.WebviewView;
+    private _currentHtml: string = '';
+
+    constructor() {
+        this._currentHtml = this.getEmptyHtml();
+    }
+
+    resolveWebviewView(webviewView: vscode.WebviewView): void {
+        this._view = webviewView;
+        webviewView.webview.options = {
+            enableScripts: true
+        };
+        webviewView.webview.html = this._currentHtml;
+    }
+
+    showResult(title: string, result: QueryResult): void {
+        this._currentHtml = renderCollectionGrid(title, result);
+        if (this._view) {
+            this._view.webview.html = this._currentHtml;
+            this._view.show?.(true);
+        }
+    }
+
+    private getEmptyHtml(): string {
+        return `<!doctype html>
+<html>
+<head>
+<meta charset="utf-8" />
+<style>
+body {
+    color: var(--vscode-editor-foreground);
+    background: var(--vscode-editor-background);
+    font-family: var(--vscode-font-family);
+    font-size: var(--vscode-font-size);
+    margin: 0;
+    padding: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 100px;
+}
+.empty-message {
+    color: var(--vscode-descriptionForeground);
+}
+</style>
+</head>
+<body>
+<div class="empty-message">No query results yet. Execute a query to see results here.</div>
+</body>
+</html>`;
     }
 }
 
@@ -307,11 +373,52 @@ th.row-number {
 }
 
 export function activate(context: vscode.ExtensionContext): void {
+
+    // Register completion provider for litedb language
+    context.subscriptions.push(
+        vscode.languages.registerCompletionItemProvider('litedb', {
+            async provideCompletionItems(document, position) {
+                // Suggest keywords/classes
+                const keywordItems = LITEDB_KEYWORDS.map(word => {
+                    const item = new vscode.CompletionItem(word, vscode.CompletionItemKind.Keyword);
+                    item.insertText = word;
+                    return item;
+                });
+
+                // Suggest collection names if a DB is open
+                let collectionItems: vscode.CompletionItem[] = [];
+                if (state.isOpen() && state.dbPath) {
+                    const response = await runBridge<string[]>(context.extensionPath, {
+                        command: 'collections',
+                        dbPath: state.dbPath
+                    });
+                    if (response.success && response.data) {
+                        collectionItems = response.data.map(name => {
+                            const item = new vscode.CompletionItem(name, vscode.CompletionItemKind.Struct);
+                            item.detail = 'Collection';
+                            item.insertText = name;
+                            return item;
+                        });
+                    }
+                }
+
+                return [
+                    ...keywordItems,
+                    ...collectionItems
+                ];
+            }
+        }, '.', ' ', '"', '\'') // Trigger on dot, space, quote, etc.
+    );
     const state = new LiteDbState();
     const provider = new LiteDbCollectionsProvider(state, context.extensionPath);
+    const resultViewProvider = new LiteDbResultViewProvider();
 
     context.subscriptions.push(
         vscode.window.registerTreeDataProvider('litedbExplorer', provider)
+    );
+
+    context.subscriptions.push(
+        vscode.window.registerWebviewViewProvider('litedbResultView', resultViewProvider)
     );
 
     context.subscriptions.push(vscode.commands.registerCommand('litedb.openDatabase', async () => {
@@ -372,6 +479,35 @@ export function activate(context: vscode.ExtensionContext): void {
         await vscode.window.showTextDocument(doc, vscode.ViewColumn.One);
     }));
 
+    // Command to execute the current script and show results in a Webview Panel
+    context.subscriptions.push(vscode.commands.registerCommand('litedb.executeScript', async () => {
+        if (!state.dbPath) {
+            vscode.window.showWarningMessage('Open a LiteDB database first.');
+            return;
+        }
+        const editor = vscode.window.activeTextEditor;
+        if (!editor) {
+            vscode.window.showWarningMessage('No active editor.');
+            return;
+        }
+        const script = editor.document.getText();
+        if (!script.trim()) {
+            vscode.window.showWarningMessage('Script is empty.');
+            return;
+        }
+        const response = await runBridge<QueryResult>(context.extensionPath, {
+            command: 'query',
+            dbPath: state.dbPath,
+            query: script
+        });
+        if (!response.success || !response.data) {
+            vscode.window.showErrorMessage(`Query failed: ${response.error ?? 'Unknown error'}`);
+            return;
+        }
+        resultViewProvider.showResult('Query Result', response.data);
+        provider.refresh();
+    }));
+
     context.subscriptions.push(vscode.commands.registerCommand('litedb.openCollection', async (collection: CollectionItem) => {
         if (!state.dbPath) {
             vscode.window.showWarningMessage('Open a LiteDB database first.');
@@ -403,6 +539,17 @@ export function activate(context: vscode.ExtensionContext): void {
         );
 
         panel.webview.html = renderCollectionGrid(collection.name, response.data);
+    }));
+
+    // Register Help command to open HELP.md as markdown
+    context.subscriptions.push(vscode.commands.registerCommand('litedb.help', async () => {
+        const helpFile = vscode.Uri.file(path.join(context.extensionPath, 'HELP.md'));
+        try {
+            const doc = await vscode.workspace.openTextDocument(helpFile);
+            await vscode.window.showTextDocument(doc, { preview: false });
+        } catch (err) {
+            vscode.window.showErrorMessage('Could not open help file: ' + (err instanceof Error ? err.message : String(err)));
+        }
     }));
 }
 
