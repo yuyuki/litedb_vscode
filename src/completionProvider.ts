@@ -4,6 +4,15 @@ interface CollectionsCache {
     collections: string[];
     lastRefresh: number;
 }
+
+// Interface for fields cache
+interface FieldsCache {
+    dbPath: string | undefined;
+    collectionName: string | undefined;
+    fields: string[];
+    lastRefresh: number;
+}
+
 import * as vscode from 'vscode';
 
 /**
@@ -13,6 +22,9 @@ import * as vscode from 'vscode';
 export class LiteDbCompletionProvider implements vscode.CompletionItemProvider {
     // In-memory cache for collections
     private collectionsCache: CollectionsCache = { dbPath: undefined, collections: [], lastRefresh: 0 };
+    
+    // In-memory cache for fields
+    private fieldsCache: FieldsCache = { dbPath: undefined, collectionName: undefined, fields: [], lastRefresh: 0 };
 
     // Refresh collections cache manually or automatically
     public async refreshCollections(): Promise<void> {
@@ -40,6 +52,54 @@ export class LiteDbCompletionProvider implements vscode.CompletionItemProvider {
         }
         
         return this.collectionsCache.collections;
+    }
+
+    // Get fields for a collection from cache
+    private async getCachedFields(collectionName: string): Promise<string[]> {
+        const dbPath = this.getDbPath();
+        
+        // If no db is open, return empty
+        if (!dbPath) {
+            return [];
+        }
+        
+        // If cache is for a different database or collection, refresh
+        if (this.fieldsCache.dbPath !== dbPath || 
+            this.fieldsCache.collectionName !== collectionName || 
+            this.fieldsCache.fields.length === 0) {
+            try {
+                const fields = await this.getFields(dbPath, collectionName);
+                this.fieldsCache = { dbPath, collectionName, fields, lastRefresh: Date.now() };
+            } catch (error) {
+                // If we fail to get fields, return empty array
+                return [];
+            }
+        }
+        
+        return this.fieldsCache.fields;
+    }
+
+    // Extract collection name from query text
+    private extractCollectionName(text: string): string | undefined {
+        // Try to find collection name after FROM
+        const fromMatch = text.match(/\bFROM\s+(\w+)/i);
+        if (fromMatch) {
+            return fromMatch[1];
+        }
+        
+        // Try to find collection name after INSERT INTO
+        const insertMatch = text.match(/\bINSERT\s+INTO\s+(\w+)/i);
+        if (insertMatch) {
+            return insertMatch[1];
+        }
+        
+        // Try to find collection name after UPDATE
+        const updateMatch = text.match(/\bUPDATE\s+(\w+)/i);
+        if (updateMatch) {
+            return updateMatch[1];
+        }
+        
+        return undefined;
     }
 
     // Official LiteDB SELECT clause order
@@ -173,7 +233,8 @@ export class LiteDbCompletionProvider implements vscode.CompletionItemProvider {
 
     constructor(
         private readonly getDbPath: () => string | undefined,
-        private readonly getCollections: (dbPath: string) => Promise<string[]>
+        private readonly getCollections: (dbPath: string) => Promise<string[]>,
+        private readonly getFields: (dbPath: string, collectionName: string) => Promise<string[]>
     ) {}
 
     async provideCompletionItems(
@@ -266,7 +327,14 @@ export class LiteDbCompletionProvider implements vscode.CompletionItemProvider {
             );
             completions.push(this.createKeywordItem('VALUES', this.insertClauseOrder[1], '04'));
         } else {
-            // After VALUES, suggest JSON document structure
+            // After VALUES, suggest JSON document structure with field names
+            const collectionName = this.extractCollectionName(text);
+            if (collectionName && dbPath) {
+                const fields = await this.getCachedFields(collectionName);
+                if (fields.length > 0) {
+                    completions.push(...this.createFieldItemsForInsert(fields));
+                }
+            }
             completions.push(...this.createFunctionItems());
         }
 
@@ -344,6 +412,18 @@ export class LiteDbCompletionProvider implements vscode.CompletionItemProvider {
                 if (i > lastClauseIndex.index) {
                     lastClauseIndex.index = i;
                     lastClauseIndex.keyword = clause.keyword;
+                }
+            }
+        }
+
+        // If we're in SELECT clause (after SELECT, before or after FROM), suggest fields from collection
+        if (presentClauses.has('SELECT')) {
+            const collectionName = this.extractCollectionName(text);
+            if (collectionName && dbPath) {
+                const fields = await this.getCachedFields(collectionName);
+                if (fields.length > 0) {
+                    // In SELECT context, we want field names directly
+                    completions.push(...this.createFieldItems(fields));
                 }
             }
         }
@@ -465,6 +545,27 @@ export class LiteDbCompletionProvider implements vscode.CompletionItemProvider {
             item.detail = detail || 'Collection in current database';
             item.insertText = name;
             item.sortText = 'z' + name; // Sort collections after keywords
+            return item;
+        });
+    }
+
+    private createFieldItems(fields: string[]): vscode.CompletionItem[] {
+        return fields.map(name => {
+            const item = new vscode.CompletionItem(name, vscode.CompletionItemKind.Field);
+            item.detail = 'Field in collection';
+            item.insertText = name;
+            item.sortText = 'a' + name; // Sort fields before keywords
+            return item;
+        });
+    }
+
+    private createFieldItemsForInsert(fields: string[]): vscode.CompletionItem[] {
+        return fields.map(name => {
+            const item = new vscode.CompletionItem(name, vscode.CompletionItemKind.Field);
+            item.detail = 'Field in collection';
+            // Insert as "fieldName": value with placeholder
+            item.insertText = new vscode.SnippetString(`"${name}": \${1:value}`);
+            item.sortText = 'a' + name; // Sort fields before keywords
             return item;
         });
     }

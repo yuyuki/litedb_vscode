@@ -429,6 +429,14 @@ export function activate(context: vscode.ExtensionContext): void {
                 dbPath: dbPath
             });
             return response.success && response.data ? response.data : [];
+        },
+        async (dbPath: string, collectionName: string) => {
+            const response = await runBridge<string[]>(context.extensionPath, {
+                command: 'fields',
+                dbPath: dbPath,
+                query: collectionName
+            });
+            return response.success && response.data ? response.data : [];
         }
     );
     

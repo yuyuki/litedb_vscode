@@ -35,6 +35,7 @@ public static class Program
             return request.Command.ToLowerInvariant() switch
             {
                 "collections" => Collections(request),
+                "fields" => Fields(request),
                 "query" => Query(request),
                 _ => Unknown(request.Command)
             };
@@ -57,6 +58,41 @@ public static class Program
         using var db = new LiteDatabase(request.DbPath);
         var names = db.GetCollectionNames().ToArray();
         Write(new BridgeResponse(true, Data: names));
+        return 0;
+    }
+
+    private static int Fields(BridgeRequest request)
+    {
+        if (string.IsNullOrWhiteSpace(request.Query))
+        {
+            Write(new BridgeResponse(false, Error: "Collection name is required in Query field"));
+            return 1;
+        }
+
+        using var db = new LiteDatabase(request.DbPath);
+        var collectionName = request.Query;
+        
+        // Check if collection exists
+        if (!db.CollectionExists(collectionName))
+        {
+            Write(new BridgeResponse(false, Error: $"Collection '{collectionName}' does not exist"));
+            return 1;
+        }
+
+        var collection = db.GetCollection(collectionName);
+        
+        // Get all distinct field names from the collection
+        var fields = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        
+        foreach (var doc in collection.FindAll())
+        {
+            foreach (var key in doc.Keys)
+            {
+                fields.Add(key);
+            }
+        }
+        
+        Write(new BridgeResponse(true, Data: fields.OrderBy(f => f).ToArray()));
         return 0;
     }
 
