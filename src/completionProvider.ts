@@ -1,3 +1,9 @@
+// Interface for collections cache
+interface CollectionsCache {
+    dbPath: string | undefined;
+    collections: string[];
+    lastRefresh: number;
+}
 import * as vscode from 'vscode';
 
 /**
@@ -5,6 +11,25 @@ import * as vscode from 'vscode';
  * from https://www.litedb.org/api/
  */
 export class LiteDbCompletionProvider implements vscode.CompletionItemProvider {
+    // In-memory cache for collections
+    private collectionsCache: CollectionsCache = { dbPath: undefined, collections: [], lastRefresh: 0 };
+
+    // Refresh collections cache manually or automatically
+    public async refreshCollections(): Promise<void> {
+        const dbPath = this.getDbPath();
+        if (!dbPath) {
+            this.collectionsCache = { dbPath: undefined, collections: [], lastRefresh: Date.now() };
+            return;
+        }
+        const collections = await this.getCollections(dbPath);
+        this.collectionsCache = { dbPath, collections, lastRefresh: Date.now() };
+    }
+
+    // Get collections from cache
+    private getCachedCollections(): string[] {
+        return this.collectionsCache.collections;
+    }
+
     // Official LiteDB SELECT clause order
     private readonly clauseOrder = [
         { keyword: 'EXPLAIN', detail: 'Show query execution plan', optional: true, insertText: 'EXPLAIN\n' },
@@ -149,78 +174,58 @@ export class LiteDbCompletionProvider implements vscode.CompletionItemProvider {
         const completions: vscode.CompletionItem[] = [];
         const dbPath = this.getDbPath();
 
-        // Detect statement type
-        const hasInsert = text.includes('INSERT');
-        const hasUpdate = text.includes('UPDATE') && !text.includes('FOR UPDATE');
-        const hasDelete = text.includes('DELETE');
-        const hasSelect = text.includes('SELECT') || text.includes('EXPLAIN');
-        const hasMisc = text.match(/\b(DROP|CREATE|RENAME|BEGIN|COMMIT|ROLLBACK|REBUILD)\b/);
 
-        // If no statement started, suggest all top-level commands
-        if (!hasInsert && !hasUpdate && !hasDelete && !hasSelect && !hasMisc) {
-            // Suggest SELECT commands
-            completions.push(
-                this.createKeywordItem('EXPLAIN', this.clauseOrder[0], '00'),
-                this.createKeywordItem('SELECT', this.clauseOrder[1], '01')
-            );
-            
-            // Suggest DML commands
-            completions.push(
-                this.createCommandItem('INSERT INTO', 'Insert documents into collection', '02'),
-                this.createCommandItem('UPDATE', 'Update documents in collection', '03'),
-                this.createCommandItem('DELETE', 'Delete documents from collection', '04')
-            );
+        // Always suggest top-level SQL keywords
+        completions.push(
+            this.createKeywordItem('EXPLAIN', this.clauseOrder[0], '00'),
+            this.createKeywordItem('SELECT', this.clauseOrder[1], '01'),
+            this.createCommandItem('INSERT INTO', 'Insert documents into collection', '02'),
+            this.createCommandItem('UPDATE', 'Update documents in collection', '03'),
+            this.createCommandItem('DELETE', 'Delete documents from collection', '04'),
+            this.createCommandItem('DROP COLLECTION', 'Drop a collection', '05'),
+            this.createCommandItem('DROP INDEX', 'Drop an index', '06'),
+            this.createCommandItem('CREATE INDEX', 'Create an index', '07'),
+            this.createCommandItem('CREATE UNIQUE INDEX', 'Create a unique index', '08'),
+            this.createCommandItem('RENAME COLLECTION', 'Rename a collection', '09'),
+            this.createCommandItem('BEGIN', 'Begin transaction', '10'),
+            this.createCommandItem('COMMIT', 'Commit transaction', '11'),
+            this.createCommandItem('ROLLBACK', 'Rollback transaction', '12'),
+            this.createCommandItem('REBUILD', 'Rebuild database', '13')
+        );
 
-            // Suggest DDL/Misc commands
-            completions.push(
-                this.createCommandItem('DROP COLLECTION', 'Drop a collection', '05'),
-                this.createCommandItem('DROP INDEX', 'Drop an index', '06'),
-                this.createCommandItem('CREATE INDEX', 'Create an index', '07'),
-                this.createCommandItem('CREATE UNIQUE INDEX', 'Create a unique index', '08'),
-                this.createCommandItem('RENAME COLLECTION', 'Rename a collection', '09'),
-                this.createCommandItem('BEGIN', 'Begin transaction', '10'),
-                this.createCommandItem('COMMIT', 'Commit transaction', '11'),
-                this.createCommandItem('ROLLBACK', 'Rollback transaction', '12'),
-                this.createCommandItem('REBUILD', 'Rebuild database', '13')
-            );
-            
-            // Also suggest collections for direct queries
-            if (dbPath) {
-                const collections = await this.getCollections(dbPath);
-                completions.push(...this.createCollectionItems(collections));
-            }
+        // Also suggest collections for direct queries (use cached collections)
+        const collections = this.getCachedCollections();
+        completions.push(...this.createCollectionItems(collections));
 
-            // Add functions
-            completions.push(...this.createFunctionItems());
-            
-            return completions;
+        // Add functions
+        completions.push(...this.createFunctionItems());
+
+        // Suggest VALUES after INSERT INTO ...
+        if (/\bINSERT\b/i.test(text)) {
+            return await this.handleInsertCompletion(text, dbPath, completions);
         }
 
-        // Handle INSERT statement
-        if (hasInsert) {
-            return this.handleInsertCompletion(text, dbPath, completions);
+        // Handle UPDATE
+        if (/\bUPDATE\b/i.test(text)) {
+            return await this.handleUpdateCompletion(text, dbPath, completions);
         }
 
-        // Handle UPDATE statement
-        if (hasUpdate) {
-            return this.handleUpdateCompletion(text, dbPath, completions);
+        // Handle DELETE
+        if (/\bDELETE\b/i.test(text)) {
+            return await this.handleDeleteCompletion(text, dbPath, completions);
         }
 
-        // Handle DELETE statement
-        if (hasDelete) {
-            return this.handleDeleteCompletion(text, dbPath, completions);
+        // Handle misc commands (DROP, CREATE, RENAME, etc.)
+        if (/\b(DROP|CREATE|RENAME|BEGIN)\b/i.test(text)) {
+            return await this.handleMiscCompletion(text, dbPath, completions);
         }
 
-        // Handle SELECT statement
-        if (hasSelect) {
-            return this.handleSelectCompletion(text, dbPath, completions);
+        // Always suggest SELECT clause keywords if editing a SELECT statement
+        if (/\bSELECT\b/i.test(text)) {
+            return await this.handleSelectCompletion(text, dbPath, completions);
         }
 
-        // Handle MISC commands
-        if (hasMisc) {
-            return this.handleMiscCompletion(text, dbPath, completions);
-        }
-
+        // All completions are now always suggested
         return completions;
     }
 
@@ -229,15 +234,15 @@ export class LiteDbCompletionProvider implements vscode.CompletionItemProvider {
         dbPath: string | undefined,
         completions: vscode.CompletionItem[]
     ): Promise<vscode.CompletionItem[]> {
-        const hasInto = text.includes('INTO');
-        const hasValues = text.includes('VALUES');
+        const hasInto = /\bINTO\b/i.test(text);
+        const hasValues = /\bVALUES\b/i.test(text);
 
         if (!hasInto) {
             completions.push(this.createKeywordItem('INTO', this.insertClauseOrder[0], '00'));
         } else if (!hasValues) {
             // After INTO, suggest collection names and auto-id types
             if (dbPath) {
-                const collections = await this.getCollections(dbPath);
+                const collections = this.getCachedCollections();
                 completions.push(...this.createCollectionItems(collections));
             }
             // Suggest auto-id type modifiers
@@ -261,13 +266,13 @@ export class LiteDbCompletionProvider implements vscode.CompletionItemProvider {
         dbPath: string | undefined,
         completions: vscode.CompletionItem[]
     ): Promise<vscode.CompletionItem[]> {
-        const hasSet = text.includes('SET');
-        const hasWhere = text.includes('WHERE');
+        const hasSet = /\bSET\b/i.test(text);
+        const hasWhere = /\bWHERE\b/i.test(text);
 
         if (!hasSet) {
             // After UPDATE, suggest collection names
             if (dbPath) {
-                const collections = await this.getCollections(dbPath);
+                const collections = this.getCachedCollections();
                 completions.push(...this.createCollectionItems(collections));
             }
             completions.push(this.createKeywordItem('SET', this.updateClauseOrder[1], '00'));
@@ -289,12 +294,12 @@ export class LiteDbCompletionProvider implements vscode.CompletionItemProvider {
         dbPath: string | undefined,
         completions: vscode.CompletionItem[]
     ): Promise<vscode.CompletionItem[]> {
-        const hasWhere = text.includes('WHERE');
+        const hasWhere = /\bWHERE\b/i.test(text);
 
         if (!hasWhere) {
             // After DELETE, suggest collection names
             if (dbPath) {
-                const collections = await this.getCollections(dbPath);
+                const collections = this.getCachedCollections();
                 completions.push(...this.createCollectionItems(collections));
             }
             completions.push(this.createKeywordItem('WHERE', this.deleteClauseOrder[1], '00'));
@@ -312,13 +317,17 @@ export class LiteDbCompletionProvider implements vscode.CompletionItemProvider {
         dbPath: string | undefined,
         completions: vscode.CompletionItem[]
     ): Promise<vscode.CompletionItem[]> {
-        // Find which clauses are already present
+        // Find which clauses are already present (case-insensitive with word boundaries)
         const presentClauses = new Set<string>();
         const lastClauseIndex = { index: -1, keyword: '' };
         
         for (let i = 0; i < this.clauseOrder.length; i++) {
             const clause = this.clauseOrder[i];
-            if (text.includes(clause.keyword)) {
+            // For multi-word keywords like "GROUP BY", "ORDER BY", "FOR UPDATE", escape spaces
+            const pattern = clause.keyword.replace(/\s+/g, '\\s+');
+            const regex = new RegExp(`\\b${pattern}\\b`, 'i');
+            
+            if (regex.test(text)) {
                 presentClauses.add(clause.keyword);
                 if (i > lastClauseIndex.index) {
                     lastClauseIndex.index = i;
@@ -328,6 +337,7 @@ export class LiteDbCompletionProvider implements vscode.CompletionItemProvider {
         }
 
         // Suggest next valid clauses based on the last clause
+        // Suggest all remaining optional clauses after the last clause
         for (let i = lastClauseIndex.index + 1; i < this.clauseOrder.length; i++) {
             const clause = this.clauseOrder[i];
             
@@ -346,18 +356,21 @@ export class LiteDbCompletionProvider implements vscode.CompletionItemProvider {
                 continue;
             }
 
-            completions.push(this.createKeywordItem(clause.keyword, clause, String(i).padStart(2, '0')));
+            // Only suggest optional clauses (all clauses after FROM are optional)
+            if (clause.optional) {
+                completions.push(this.createKeywordItem(clause.keyword, clause, String(i).padStart(2, '0')));
+            }
         }
 
         // Suggest collection names after FROM or INTO
         if (['FROM', 'INTO'].includes(lastClauseIndex.keyword) && dbPath) {
-            const collections = await this.getCollections(dbPath);
+            const collections = this.getCachedCollections();
             completions.push(...this.createCollectionItems(collections));
         }
 
         // Suggest collections after INCLUDE (for reference resolution)
         if (lastClauseIndex.keyword === 'INCLUDE' && dbPath) {
-            const collections = await this.getCollections(dbPath);
+            const collections = this.getCachedCollections();
             completions.push(...this.createCollectionItems(collections, 'Referenced collection'));
         }
 
@@ -375,28 +388,28 @@ export class LiteDbCompletionProvider implements vscode.CompletionItemProvider {
         dbPath: string | undefined,
         completions: vscode.CompletionItem[]
     ): Promise<vscode.CompletionItem[]> {
-        // Handle specific misc commands
-        if (text.includes('DROP COLLECTION') || text.includes('DROP INDEX')) {
+        // Handle specific misc commands (case-insensitive)
+        if (/\bDROP\s+COLLECTION\b/i.test(text) || /\bDROP\s+INDEX\b/i.test(text)) {
             if (dbPath) {
-                const collections = await this.getCollections(dbPath);
+                const collections = this.getCachedCollections();
                 completions.push(...this.createCollectionItems(collections));
             }
-        } else if (text.includes('RENAME COLLECTION')) {
-            if (!text.includes(' TO ')) {
+        } else if (/\bRENAME\s+COLLECTION\b/i.test(text)) {
+            if (!/\bTO\b/i.test(text)) {
                 if (dbPath) {
-                    const collections = await this.getCollections(dbPath);
+                    const collections = this.getCachedCollections();
                     completions.push(...this.createCollectionItems(collections));
                 }
                 completions.push(this.createCommandItem('TO', 'New name', '00'));
             }
-        } else if (text.includes('CREATE') && text.includes('INDEX')) {
-            if (!text.includes(' ON ')) {
+        } else if (/\bCREATE\b/i.test(text) && /\bINDEX\b/i.test(text)) {
+            if (!/\bON\b/i.test(text)) {
                 completions.push(this.createCommandItem('ON', 'Specify collection', '00'));
             } else if (dbPath) {
-                const collections = await this.getCollections(dbPath);
+                const collections = this.getCachedCollections();
                 completions.push(...this.createCollectionItems(collections));
             }
-        } else if (text.includes('BEGIN')) {
+        } else if (/\bBEGIN\b/i.test(text)) {
             completions.push(
                 this.createCommandItem('TRANS', 'Begin transaction', '00'),
                 this.createCommandItem('TRANSACTION', 'Begin transaction', '01')
