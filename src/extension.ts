@@ -118,6 +118,14 @@ class LiteDbResultViewProvider implements vscode.WebviewViewProvider {
         }
     }
 
+    showLoading(message: string = 'Query in progress...'): void {
+        this._currentHtml = this.getLoadingHtml(message);
+        if (this._view) {
+            this._view.webview.html = this._currentHtml;
+            this._view.show?.(true);
+        }
+    }
+
     private getEmptyHtml(): string {
         return `<!doctype html>
 <html>
@@ -143,6 +151,51 @@ body {
 </head>
 <body>
 <div class="empty-message">No query results yet. Execute a query to see results here.</div>
+</body>
+</html>`;
+    }
+
+    private getLoadingHtml(message: string): string {
+        return `<!doctype html>
+<html>
+<head>
+<meta charset="utf-8" />
+<style>
+body {
+    color: var(--vscode-editor-foreground);
+    background: var(--vscode-editor-background);
+    font-family: var(--vscode-font-family);
+    font-size: var(--vscode-font-size);
+    margin: 0;
+    padding: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 100px;
+}
+.loading-message {
+    color: var(--vscode-descriptionForeground);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 1.1em;
+}
+.spinner {
+    border: 4px solid var(--vscode-panel-border);
+    border-top: 4px solid var(--vscode-editor-foreground);
+    border-radius: 50%;
+    width: 22px;
+    height: 22px;
+    animation: spin 1s linear infinite;
+}
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+</style>
+</head>
+<body>
+<div class="loading-message"><span class="spinner"></span> ${message}</div>
 </body>
 </html>`;
     }
@@ -434,19 +487,27 @@ export function activate(context: vscode.ExtensionContext): void {
         }
 
         const dbPath = pick[0].fsPath;
-        const validation = await runBridge<string[]>(context.extensionPath, {
-            command: 'collections',
-            dbPath
+
+        await vscode.window.withProgress({
+            location: vscode.ProgressLocation.Notification,
+            title: 'Opening LiteDB database...',
+            cancellable: false
+        }, async (progress) => {
+            progress.report({ message: 'Validating database...' });
+            const validation = await runBridge<string[]>(context.extensionPath, {
+                command: 'collections',
+                dbPath
+            });
+
+            if (!validation.success) {
+                vscode.window.showErrorMessage(`Failed to open LiteDB: ${validation.error ?? 'Unknown error'}`);
+                return;
+            }
+
+            state.open(dbPath);
+            provider.refresh();
+            vscode.window.showInformationMessage(`Opened LiteDB: ${dbPath}`);
         });
-
-        if (!validation.success) {
-            vscode.window.showErrorMessage(`Failed to open LiteDB: ${validation.error ?? 'Unknown error'}`);
-            return;
-        }
-
-        state.open(dbPath);
-        provider.refresh();
-        vscode.window.showInformationMessage(`Opened LiteDB: ${dbPath}`);
     }));
 
     context.subscriptions.push(vscode.commands.registerCommand('litedb.closeDatabase', () => {
@@ -495,6 +556,8 @@ export function activate(context: vscode.ExtensionContext): void {
             vscode.window.showWarningMessage('Script is empty.');
             return;
         }
+        // Show loading/progress in result view
+        resultViewProvider.showLoading('Query in progress...');
         const response = await runBridge<QueryResult>(context.extensionPath, {
             command: 'query',
             dbPath: state.dbPath,
@@ -502,6 +565,7 @@ export function activate(context: vscode.ExtensionContext): void {
         });
         if (!response.success || !response.data) {
             vscode.window.showErrorMessage(`Query failed: ${response.error ?? 'Unknown error'}`);
+            // Optionally, keep the loading or show empty state
             return;
         }
         resultViewProvider.showResult('Query Result', response.data);
