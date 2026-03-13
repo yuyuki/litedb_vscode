@@ -55,7 +55,8 @@ public static class Program
 
     private static int Collections(BridgeRequest request)
     {
-        using var db = new LiteDatabase(request.DbPath);
+        var connectionString = $"Filename={request.DbPath};Mode=Shared";
+        using var db = new LiteDatabase(connectionString);
         var names = db.GetCollectionNames().ToArray();
         Write(new BridgeResponse(true, Data: names));
         return 0;
@@ -69,7 +70,8 @@ public static class Program
             return 1;
         }
 
-        using var db = new LiteDatabase(request.DbPath);
+        var connectionString = $"Filename={request.DbPath};Mode=Shared";
+        using var db = new LiteDatabase(connectionString);
         var collectionName = request.Query;
         
         // Check if collection exists
@@ -104,7 +106,8 @@ public static class Program
             return 1;
         }
 
-        using var db = new LiteDatabase(request.DbPath);
+        var connectionString = $"Filename={request.DbPath};Mode=Shared";
+        using var db = new LiteDatabase(connectionString);
         // execute query and normalize records into grid rows
         var result = db.Execute(request.Query).ToList();
         var rows = result

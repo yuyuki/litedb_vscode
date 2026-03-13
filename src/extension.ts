@@ -553,8 +553,11 @@ export function activate(context: vscode.ExtensionContext): void {
             return;
         }
         resultViewProvider.showResult('Query Result', response.data);
-        provider.refresh();
-        await completionProvider.refreshCollections();
+        // Only refresh collections if the script contains INSERT or DELETE
+        if (/\b(INSERT|DELETE)\b/i.test(script)) {
+            provider.refresh();
+            await completionProvider.refreshCollections();
+        }
     }));
 
     context.subscriptions.push(vscode.commands.registerCommand('litedb.openCollection', async (collection: CollectionItem) => {
