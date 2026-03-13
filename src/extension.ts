@@ -1,18 +1,7 @@
-// LiteDB SQL keywords and classes for completion
-const LITEDB_KEYWORDS = [
-    // SQL-like keywords
-    'SELECT', 'FROM', 'WHERE', 'INSERT', 'INTO', 'VALUES', 'UPDATE', 'SET', 'DELETE', 'DROP', 'COLLECTION', 'RENAME', 'TO',
-    // Functions
-    'COUNT', 'LOWER', 'LENGTH',
-    // LiteDB classes/interfaces
-    'LiteDatabase', 'LiteCollection', 'LiteQueryable',
-    // Other useful
-    'ORDER BY', 'GROUP BY', 'LIMIT', 'OFFSET', 'DISTINCT', 'ASC', 'DESC', 'AND', 'OR', 'NOT', 'NULL', 'TRUE', 'FALSE'
-];
-
 import * as vscode from 'vscode';
 import * as path from 'path';
 import { spawn } from 'child_process';
+import { LiteDbCompletionProvider } from './completionProvider';
 
 type BridgeResponse<T> = {
     success: boolean;
@@ -427,44 +416,25 @@ th.row-number {
 
 export function activate(context: vscode.ExtensionContext): void {
 
-    // Register completion provider for litedb language
-    context.subscriptions.push(
-        vscode.languages.registerCompletionItemProvider('litedb', {
-            async provideCompletionItems(document, position) {
-                // Suggest keywords/classes
-                const keywordItems = LITEDB_KEYWORDS.map(word => {
-                    const item = new vscode.CompletionItem(word, vscode.CompletionItemKind.Keyword);
-                    item.insertText = word;
-                    return item;
-                });
-
-                // Suggest collection names if a DB is open
-                let collectionItems: vscode.CompletionItem[] = [];
-                if (state.isOpen() && state.dbPath) {
-                    const response = await runBridge<string[]>(context.extensionPath, {
-                        command: 'collections',
-                        dbPath: state.dbPath
-                    });
-                    if (response.success && response.data) {
-                        collectionItems = response.data.map(name => {
-                            const item = new vscode.CompletionItem(name, vscode.CompletionItemKind.Struct);
-                            item.detail = 'Collection';
-                            item.insertText = name;
-                            return item;
-                        });
-                    }
-                }
-
-                return [
-                    ...keywordItems,
-                    ...collectionItems
-                ];
-            }
-        }, '.', ' ', '"', '\'') // Trigger on dot, space, quote, etc.
-    );
     const state = new LiteDbState();
     const provider = new LiteDbCollectionsProvider(state, context.extensionPath);
     const resultViewProvider = new LiteDbResultViewProvider();
+
+    // Register smart LiteDB IntelliSense
+    const completionProvider = new LiteDbCompletionProvider(
+        () => state.dbPath,
+        async (dbPath: string) => {
+            const response = await runBridge<string[]>(context.extensionPath, {
+                command: 'collections',
+                dbPath: dbPath
+            });
+            return response.success && response.data ? response.data : [];
+        }
+    );
+    
+    context.subscriptions.push(
+        vscode.languages.registerCompletionItemProvider('litedb', completionProvider, ' ')
+    );
 
     context.subscriptions.push(
         vscode.window.registerTreeDataProvider('litedbExplorer', provider)
