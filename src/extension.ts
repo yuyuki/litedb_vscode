@@ -476,6 +476,7 @@ export function activate(context: vscode.ExtensionContext): void {
 
             state.open(dbPath);
             provider.refresh();
+            await completionProvider.refreshCollections();
             vscode.window.showInformationMessage(`Opened LiteDB: ${dbPath}`);
         });
     }));
@@ -488,11 +489,13 @@ export function activate(context: vscode.ExtensionContext): void {
 
         state.close();
         provider.refresh();
+        completionProvider.refreshCollections();
         vscode.window.showInformationMessage('LiteDB database closed.');
     }));
 
     context.subscriptions.push(vscode.commands.registerCommand('litedb.refreshCollections', () => {
         provider.refresh();
+        completionProvider.refreshCollections();
     }));
 
     context.subscriptions.push(vscode.commands.registerCommand('litedb.runQuery', async () => {
@@ -500,6 +503,9 @@ export function activate(context: vscode.ExtensionContext): void {
             vscode.window.showWarningMessage('Open a LiteDB database first.');
             return;
         }
+
+        // Refresh collections cache before opening the query editor
+        await completionProvider.refreshCollections();
 
         // Create a new untitled document with LiteDB language
         const doc = await vscode.workspace.openTextDocument({
@@ -540,6 +546,7 @@ export function activate(context: vscode.ExtensionContext): void {
         }
         resultViewProvider.showResult('Query Result', response.data);
         provider.refresh();
+        await completionProvider.refreshCollections();
     }));
 
     context.subscriptions.push(vscode.commands.registerCommand('litedb.openCollection', async (collection: CollectionItem) => {

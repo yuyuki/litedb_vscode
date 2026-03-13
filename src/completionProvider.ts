@@ -25,8 +25,20 @@ export class LiteDbCompletionProvider implements vscode.CompletionItemProvider {
         this.collectionsCache = { dbPath, collections, lastRefresh: Date.now() };
     }
 
-    // Get collections from cache
-    private getCachedCollections(): string[] {
+    // Get collections from cache, auto-refresh if stale or dbPath changed
+    private async getCachedCollections(): Promise<string[]> {
+        const dbPath = this.getDbPath();
+        
+        // If no db is open, return empty
+        if (!dbPath) {
+            return [];
+        }
+        
+        // If cache is for a different database or is empty, refresh
+        if (this.collectionsCache.dbPath !== dbPath || this.collectionsCache.collections.length === 0) {
+            await this.refreshCollections();
+        }
+        
         return this.collectionsCache.collections;
     }
 
@@ -194,7 +206,7 @@ export class LiteDbCompletionProvider implements vscode.CompletionItemProvider {
         );
 
         // Also suggest collections for direct queries (use cached collections)
-        const collections = this.getCachedCollections();
+        const collections = await this.getCachedCollections();
         completions.push(...this.createCollectionItems(collections));
 
         // Add functions
@@ -242,7 +254,7 @@ export class LiteDbCompletionProvider implements vscode.CompletionItemProvider {
         } else if (!hasValues) {
             // After INTO, suggest collection names and auto-id types
             if (dbPath) {
-                const collections = this.getCachedCollections();
+                const collections = await this.getCachedCollections();
                 completions.push(...this.createCollectionItems(collections));
             }
             // Suggest auto-id type modifiers
@@ -272,7 +284,7 @@ export class LiteDbCompletionProvider implements vscode.CompletionItemProvider {
         if (!hasSet) {
             // After UPDATE, suggest collection names
             if (dbPath) {
-                const collections = this.getCachedCollections();
+                const collections = await this.getCachedCollections();
                 completions.push(...this.createCollectionItems(collections));
             }
             completions.push(this.createKeywordItem('SET', this.updateClauseOrder[1], '00'));
@@ -299,7 +311,7 @@ export class LiteDbCompletionProvider implements vscode.CompletionItemProvider {
         if (!hasWhere) {
             // After DELETE, suggest collection names
             if (dbPath) {
-                const collections = this.getCachedCollections();
+                const collections = await this.getCachedCollections();
                 completions.push(...this.createCollectionItems(collections));
             }
             completions.push(this.createKeywordItem('WHERE', this.deleteClauseOrder[1], '00'));
@@ -336,6 +348,14 @@ export class LiteDbCompletionProvider implements vscode.CompletionItemProvider {
             }
         }
 
+        // Always suggest FROM if it's not present yet (it comes after SELECT)
+        if (!presentClauses.has('FROM')) {
+            const fromClause = this.clauseOrder.find(c => c.keyword === 'FROM');
+            if (fromClause) {
+                completions.push(this.createKeywordItem('FROM', fromClause, '03'));
+            }
+        }
+
         // Suggest next valid clauses based on the last clause
         // Suggest all remaining optional clauses after the last clause
         for (let i = lastClauseIndex.index + 1; i < this.clauseOrder.length; i++) {
@@ -364,13 +384,13 @@ export class LiteDbCompletionProvider implements vscode.CompletionItemProvider {
 
         // Suggest collection names after FROM or INTO
         if (['FROM', 'INTO'].includes(lastClauseIndex.keyword) && dbPath) {
-            const collections = this.getCachedCollections();
+            const collections = await this.getCachedCollections();
             completions.push(...this.createCollectionItems(collections));
         }
 
         // Suggest collections after INCLUDE (for reference resolution)
         if (lastClauseIndex.keyword === 'INCLUDE' && dbPath) {
-            const collections = this.getCachedCollections();
+            const collections = await this.getCachedCollections();
             completions.push(...this.createCollectionItems(collections, 'Referenced collection'));
         }
 
@@ -391,13 +411,13 @@ export class LiteDbCompletionProvider implements vscode.CompletionItemProvider {
         // Handle specific misc commands (case-insensitive)
         if (/\bDROP\s+COLLECTION\b/i.test(text) || /\bDROP\s+INDEX\b/i.test(text)) {
             if (dbPath) {
-                const collections = this.getCachedCollections();
+                const collections = await this.getCachedCollections();
                 completions.push(...this.createCollectionItems(collections));
             }
         } else if (/\bRENAME\s+COLLECTION\b/i.test(text)) {
             if (!/\bTO\b/i.test(text)) {
                 if (dbPath) {
-                    const collections = this.getCachedCollections();
+                    const collections = await this.getCachedCollections();
                     completions.push(...this.createCollectionItems(collections));
                 }
                 completions.push(this.createCommandItem('TO', 'New name', '00'));
@@ -406,7 +426,7 @@ export class LiteDbCompletionProvider implements vscode.CompletionItemProvider {
             if (!/\bON\b/i.test(text)) {
                 completions.push(this.createCommandItem('ON', 'Specify collection', '00'));
             } else if (dbPath) {
-                const collections = this.getCachedCollections();
+                const collections = await this.getCachedCollections();
                 completions.push(...this.createCollectionItems(collections));
             }
         } else if (/\bBEGIN\b/i.test(text)) {
