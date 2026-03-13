@@ -22,23 +22,27 @@
     "commands": [
       {
         "command": "litedb.openDatabase",
-        "title": "LiteDB: Open Database"
+        "title": "Open Database",
+        "icon": "$(folder-opened)"
       },
       {
         "command": "litedb.closeDatabase",
-        "title": "LiteDB: Close Database"
+        "title": "Close Database",
+        "icon": "$(close)"
       },
       {
         "command": "litedb.runQuery",
-        "title": "LiteDB: Run Query"
+        "title": "Run Query",
+        "icon": "$(run)"
       },
       {
         "command": "litedb.refreshCollections",
-        "title": "LiteDB: Refresh Collections"
+        "title": "Refresh Collections",
+        "icon": "$(refresh)"
       },
       {
         "command": "litedb.openCollection",
-        "title": "LiteDB: Open Collection"
+        "title": "Open Collection"
       }
     ],
     "views": {
