@@ -24,11 +24,11 @@
     },
     {
       "name": "keyword.control.litedb",
-      "match": "\\b(SELECT|FROM|WHERE|ORDER BY|AS|WITH|CASE|WHEN|THEN|ELSE|END|AND|OR|NOT|IN|ON|JOIN|LEFT|RIGHT|INNER|OUTER|GROUP BY|LIMIT|INSERT|DELETE|UPDATE|VALUES|SET|DISTINCT|BY)\\b"
+  "match": "(?i)\\b(SELECT|FROM|WHERE|ORDER BY|AS|WITH|CASE|WHEN|THEN|ELSE|END|AND|OR|NOT|IN|ON|JOIN|LEFT|RIGHT|INNER|OUTER|GROUP BY|LIMIT|INSERT|DELETE|UPDATE|VALUES|SET|DISTINCT|BY)\\b"
     },
     {
       "name": "variable.other.litedb",
-      "match": "\\b[a-zA-Z_][a-zA-Z0-9_]*\\b"
+  "match": "(?i)\\b[a-zA-Z_][a-zA-Z0-9_]*\\b"
     },
     {
       "name": "keyword.operator.litedb",
@@ -36,7 +36,7 @@
     },
     {
       "name": "support.function.litedb",
-      "match": "\\b(CASE|COUNT|SUM|AVG|MIN|MAX|UPPER|LOWER|LENGTH)\\b"
+  "match": "(?i)\\b(CASE|COUNT|SUM|AVG|MIN|MAX|UPPER|LOWER|LENGTH)\\b"
     }
   ],
   "repository": {
