@@ -1,4 +1,6 @@
 import * as vscode from 'vscode';
+import * as fs from 'fs';
+import * as path from 'path';
 import { renderCollectionGrid, QueryResult } from './gridRenderer';
 
 export class LiteDbResultViewProvider implements vscode.WebviewViewProvider {
@@ -11,7 +13,10 @@ export class LiteDbResultViewProvider implements vscode.WebviewViewProvider {
     private _view?: vscode.WebviewView;
     private _currentHtml: string = '';
 
+    private _templateHtml: string;
+
     constructor() {
+        this._templateHtml = this.loadTemplateHtml();
         this._currentHtml = this.getEmptyHtml();
     }
 
@@ -40,76 +45,27 @@ export class LiteDbResultViewProvider implements vscode.WebviewViewProvider {
     }
 
     private getEmptyHtml(): string {
-        return `<!doctype html>
-<html>
-<head>
-<meta charset="utf-8" />
-<style>
-body {
-    color: var(--vscode-editor-foreground);
-    background: var(--vscode-editor-background);
-    font-family: var(--vscode-font-family);
-    font-size: var(--vscode-font-size);
-    margin: 0;
-    padding: 16px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    min-height: 100px;
-}
-.empty-message {
-    color: var(--vscode-descriptionForeground);
-}
-</style>
-</head>
-<body>
-<div class="empty-message">No query results yet. Execute a query to see results here.</div>
-</body>
-</html>`;
+        return this._templateHtml.replace(
+            '<!--CONTENT_PLACEHOLDER-->',
+            '<div class="empty-message">No query results yet. Execute a query to see results here.</div>'
+        );
     }
 
     private getLoadingHtml(message: string): string {
-        return `<!doctype html>
-<html>
-<head>
-<meta charset="utf-8" />
-<style>
-body {
-    color: var(--vscode-editor-foreground);
-    background: var(--vscode-editor-background);
-    font-family: var(--vscode-font-family);
-    font-size: var(--vscode-font-size);
-    margin: 0;
-    padding: 16px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    min-height: 100px;
-}
-.loading-message {
-    color: var(--vscode-descriptionForeground);
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    font-size: 1.1em;
-}
-.spinner {
-    border: 4px solid var(--vscode-panel-border);
-    border-top: 4px solid var(--vscode-editor-foreground);
-    border-radius: 50%;
-    width: 22px;
-    height: 22px;
-    animation: spin 1s linear infinite;
-}
-@keyframes spin {
-    0% { transform: rotate(0deg); }
-    100% { transform: rotate(360deg); }
-}
-</style>
-</head>
-<body>
-<div class="loading-message"><span class="spinner"></span> ${message}</div>
-</body>
-</html>`;
+        return this._templateHtml.replace(
+            '<!--CONTENT_PLACEHOLDER-->',
+            `<div class="loading-message"><span class="spinner"></span> ${message}</div>`
+        );
+    }
+
+    private loadTemplateHtml(): string {
+        // __dirname is not available in ES modules, so use path relative to this file
+        const templatePath = path.join(__dirname, '../media/resultView.html');
+        try {
+            return fs.readFileSync(templatePath, 'utf8');
+        } catch (err) {
+            // fallback to a minimal HTML if file not found
+            return '<html><body><!--CONTENT_PLACEHOLDER--></body></html>';
+        }
     }
 }
