@@ -560,7 +560,7 @@ export function activate(context: vscode.ExtensionContext): void {
             // Create a new untitled document with LiteDB language
             const doc = await vscode.workspace.openTextDocument({
                 language: 'litedb',
-                content: '-- Enter your LiteDB SQL query here\n-- Example: SELECT * FROM customers LIMIT 20\n\n'
+                content: '-- Enter your LiteDB SQL query here\n\n'
             });
 
             await vscode.window.showTextDocument(doc, vscode.ViewColumn.One);
@@ -603,7 +603,7 @@ export function activate(context: vscode.ExtensionContext): void {
             resultViewProvider.showResult('Query Result', response.data);
             // Only refresh collections if the script contains INSERT or DELETE
             if (/\b(INSERT|DELETE)\b/i.test(script)) {
-                provider.refresh();
+            provider.refresh();
                 await completionProvider.refreshCollections();
             }
         });
