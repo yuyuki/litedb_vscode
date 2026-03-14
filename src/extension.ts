@@ -51,6 +51,7 @@ class CollectionItem extends vscode.TreeItem {
 class LiteDbCollectionsProvider implements vscode.TreeDataProvider<CollectionItem> {
     private readonly _onDidChangeTreeData = new vscode.EventEmitter<CollectionItem | undefined | void>();
     readonly onDidChangeTreeData = this._onDidChangeTreeData.event;
+    private retryCount: Map<string, number> = new Map();
 
     constructor(private readonly state: LiteDbState, private readonly extensionPath: string) {}
 
@@ -69,16 +70,50 @@ class LiteDbCollectionsProvider implements vscode.TreeDataProvider<CollectionIte
             ];
         }
 
+        const dbPath = this.state.dbPath;
         const response = await runBridge<string[]>(this.extensionPath, {
             command: 'collections',
-            dbPath: this.state.dbPath
+            dbPath: dbPath
         });
 
         if (!response.success || !response.data) {
+            const currentRetries = this.retryCount.get(dbPath) ?? 0;
+            
+            // First error: retry silently
+            if (currentRetries === 0) {
+                this.retryCount.set(dbPath, 1);
+                
+                // Wait a brief moment before retrying
+                await new Promise(resolve => setTimeout(resolve, 100));
+                
+                // Retry once
+                const retryResponse = await runBridge<string[]>(this.extensionPath, {
+                    command: 'collections',
+                    dbPath: dbPath
+                });
+                
+                if (retryResponse.success && retryResponse.data) {
+                    // Retry succeeded, reset counter
+                    this.retryCount.delete(dbPath);
+                    return retryResponse.data.map((name) => new CollectionItem(name));
+                }
+            }
+            
+            // Second error or retry failed: show error and reinitialize
+            this.retryCount.delete(dbPath);
             vscode.window.showErrorMessage(`LiteDB collections error: ${response.error ?? 'Unknown error'}`);
-            return [];
+            
+            // Close the database and refresh to show "No database opened"
+            this.state.close();
+            this.refresh();
+            
+            return [
+                new CollectionItem('No database opened')
+            ];
         }
 
+        // Success: reset retry counter for this database
+        this.retryCount.delete(dbPath);
         return response.data.map((name) => new CollectionItem(name));
     }
 }
