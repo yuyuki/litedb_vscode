@@ -1,6 +1,9 @@
-using LiteDB;
+// Optimized C# backend for LiteDB operations
 
-// alias System.Text.Json classes to avoid conflict with LiteDB.JsonSerializer
+using LiteDB;
+using System.Linq;
+
+// Alias to avoid conflicts
 using JsonSerializer = System.Text.Json.JsonSerializer;
 using JsonSerializerOptions = System.Text.Json.JsonSerializerOptions;
 using JsonNamingPolicy = System.Text.Json.JsonNamingPolicy;
@@ -8,150 +11,188 @@ using JsonNamingPolicy = System.Text.Json.JsonNamingPolicy;
 public sealed record BridgeRequest(string Command, string DbPath, string? Query);
 public sealed record BridgeResponse(bool Success, object? Data = null, string? Error = null);
 
-
 public static class Program
 {
     // Cache LiteDatabase instances by file path
-    private static readonly Dictionary<string, LiteDatabase> _dbCache = new(StringComparer.OrdinalIgnoreCase);
+    private static readonly Dictionary<string, LiteDatabase> _dbCache = 
+        new(StringComparer.OrdinalIgnoreCase);
+    
+    private static readonly JsonSerializerOptions _jsonOptions = new()
+    {
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+    };
 
     public static int Main(string[] args)
     {
-        AppDomain.CurrentDomain.ProcessExit += (_, __) => CloseAllDbs();
+        AppDomain.CurrentDomain.ProcessExit += (_, __) => CloseAllDatabases();
+        
         string? line;
         while ((line = Console.ReadLine()) != null)
         {
-            // Log the received line for debugging
-            Console.Error.WriteLine($"[LiteDbBridge] Received: {line}");
-            try
-            {
-                if (string.IsNullOrWhiteSpace(line))
-                {
-                    Write(new BridgeResponse(false, Error: "Missing request payload"));
-                    continue;
-                }
-
-                var request = JsonSerializer.Deserialize<BridgeRequest>(line, new JsonSerializerOptions
-                {
-                    PropertyNameCaseInsensitive = true
-                });
-
-                if (request is null)
-                {
-                    Write(new BridgeResponse(false, Error: "Invalid request payload"));
-                    continue;
-                }
-
-                var command = request.Command.ToLowerInvariant();
-                int result = command switch
-                {
-                    "collections" => Collections(request),
-                    "fields" => Fields(request),
-                    "query" => Query(request),
-                    _ => Unknown(request.Command)
-                };
-                // Optionally, you can break on error, but for now, keep looping
-            }
-            catch (Exception ex)
-            {
-                Write(new BridgeResponse(false, Error: ex.Message));
-            }
+            ProcessRequest(line);
         }
-        CloseAllDbs();
+        
+        CloseAllDatabases();
         return 0;
     }
 
-    private static LiteDatabase GetDb(string dbPath)
+    private static void ProcessRequest(string line)
+    {
+        try
+        {
+            if (string.IsNullOrWhiteSpace(line))
+            {
+                WriteResponse(new BridgeResponse(false, Error: "Empty request"));
+                return;
+            }
+
+            var request = JsonSerializer.Deserialize<BridgeRequest>(line, new JsonSerializerOptions
+            {
+                PropertyNameCaseInsensitive = true
+            });
+
+            if (request is null)
+            {
+                WriteResponse(new BridgeResponse(false, Error: "Invalid request format"));
+                return;
+            }
+
+            ExecuteCommand(request);
+        }
+        catch (Exception ex)
+        {
+            WriteResponse(new BridgeResponse(false, Error: $"Request error: {ex.Message}"));
+            LogError($"Error processing request: {ex}");
+        }
+    }
+
+    private static void ExecuteCommand(BridgeRequest request)
+    {
+        try
+        {
+            switch (request.Command.ToLowerInvariant())
+            {
+                case "collections":
+                    GetCollections(request);
+                    break;
+                case "fields":
+                    GetFields(request);
+                    break;
+                case "query":
+                    ExecuteQuery(request);
+                    break;
+                default:
+                    WriteResponse(new BridgeResponse(false, Error: $"Unknown command: {request.Command}"));
+                    break;
+            }
+        }
+        catch (Exception ex)
+        {
+            WriteResponse(new BridgeResponse(false, Error: ex.Message));
+            LogError($"Command execution error: {ex}");
+        }
+    }
+
+    private static LiteDatabase GetDatabase(string dbPath)
     {
         if (_dbCache.TryGetValue(dbPath, out var db))
         {
             return db;
         }
+
         var connectionString = $"Filename={dbPath};Mode=Shared";
         db = new LiteDatabase(connectionString);
         _dbCache[dbPath] = db;
+        
+        LogInfo($"Opened database: {dbPath}");
         return db;
     }
 
-    private static void CloseAllDbs()
+    private static void CloseAllDatabases()
     {
-        foreach (var db in _dbCache.Values)
+        foreach (var (path, db) in _dbCache)
         {
-            db.Dispose();
+            try
+            {
+                db.Dispose();
+                LogInfo($"Closed database: {path}");
+            }
+            catch (Exception ex)
+            {
+                LogError($"Error closing database {path}: {ex.Message}");
+            }
         }
         _dbCache.Clear();
     }
 
-    private static int Unknown(string command)
+    private static void GetCollections(BridgeRequest request)
     {
-        Write(new BridgeResponse(false, Error: $"Unsupported command: {command}"));
-        return 1;
-    }
-
-    private static int Collections(BridgeRequest request)
-    {
-        var db = GetDb(request.DbPath);
+        var db = GetDatabase(request.DbPath);
         var names = db.GetCollectionNames().ToArray();
-        Write(new BridgeResponse(true, Data: names));
-        return 0;
+        WriteResponse(new BridgeResponse(true, Data: names));
     }
 
-    private static int Fields(BridgeRequest request)
+    private static void GetFields(BridgeRequest request)
     {
         if (string.IsNullOrWhiteSpace(request.Query))
         {
-            Write(new BridgeResponse(false, Error: "Collection name is required in Query field"));
-            return 1;
+            WriteResponse(new BridgeResponse(false, Error: "Collection name required in Query field"));
+            return;
         }
 
-        var db = GetDb(request.DbPath);
+        var db = GetDatabase(request.DbPath);
         var collectionName = request.Query;
-        // Check if collection exists
+
         if (!db.CollectionExists(collectionName))
         {
-            Write(new BridgeResponse(false, Error: $"Collection '{collectionName}' does not exist"));
-            return 1;
+            WriteResponse(new BridgeResponse(false, Error: $"Collection '{collectionName}' not found"));
+            return;
         }
 
         var collection = db.GetCollection(collectionName);
-        // Get all distinct field names from the collection
         var fields = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var doc in collection.FindAll())
+
+        // Sample first N documents for performance
+        const int sampleSize = 100;
+        var documents = collection.Query().Limit(sampleSize).ToList();
+        
+        foreach (var doc in documents)
         {
             foreach (var key in doc.Keys)
             {
                 fields.Add(key);
             }
         }
-        Write(new BridgeResponse(true, Data: fields.OrderBy(f => f).ToArray()));
-        return 0;
+
+        WriteResponse(new BridgeResponse(true, Data: fields.OrderBy(f => f).ToArray()));
     }
 
-    private static int Query(BridgeRequest request)
+    private static void ExecuteQuery(BridgeRequest request)
     {
         if (string.IsNullOrWhiteSpace(request.Query))
         {
-            Write(new BridgeResponse(false, Error: "Query is required"));
-            return 1;
+            WriteResponse(new BridgeResponse(false, Error: "Query cannot be empty"));
+            return;
         }
 
-        var db = GetDb(request.DbPath);
-        // execute query and normalize records into grid rows
-        var result = db.Execute(request.Query).ToList();
-        var rows = result
-            .SelectMany(ExpandToRows)
-            .ToList();
-
-        var columns = rows
-            .SelectMany(r => r.Keys)
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .ToArray();
-
-        Write(new BridgeResponse(true, Data: new
+        var db = GetDatabase(request.DbPath);
+        
+        try
         {
-            columns,
-            rows
-        }));
-        return 0;
+            var result = db.Execute(request.Query).ToList();
+            var rows = result.SelectMany(ExpandToRows).ToList();
+
+            var columns = rows
+                .SelectMany(r => r.Keys)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+
+            WriteResponse(new BridgeResponse(true, Data: new { columns, rows }));
+        }
+        catch (LiteException ex)
+        {
+            WriteResponse(new BridgeResponse(false, Error: $"Query error: {ex.Message}"));
+        }
     }
 
     private static IEnumerable<IDictionary<string, string>> ExpandToRows(BsonValue value)
@@ -166,11 +207,15 @@ public static class Program
             return value.AsArray.SelectMany(ExpandToRows);
         }
 
-        return new[] { new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["value"] = ToDisplayString(value) } };
+        return new[] { new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) 
+        { 
+            ["value"] = FormatValue(value) 
+        }};
     }
 
     private static IEnumerable<IDictionary<string, string>> ExpandDocument(BsonDocument doc)
     {
+        // If document has single array field, expand it
         if (doc.Count == 1)
         {
             var first = doc.First();
@@ -183,13 +228,13 @@ public static class Program
         var row = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         foreach (var key in doc.Keys)
         {
-            row[key] = ToDisplayString(doc[key]);
+            row[key] = FormatValue(doc[key]);
         }
 
         return new[] { (IDictionary<string, string>)row };
     }
 
-    private static string ToDisplayString(BsonValue value)
+    private static string FormatValue(BsonValue value)
     {
         if (value.IsNull)
         {
@@ -198,37 +243,53 @@ public static class Program
 
         if (value.IsArray || value.IsDocument)
         {
-            return JsonSerializer.Serialize(ToNative(value));
+            return JsonSerializer.Serialize(ConvertToNative(value));
         }
 
         return BsonMapper.Global.Serialize(value).RawValue?.ToString() ?? string.Empty;
     }
 
-    private static object? ToNative(BsonValue value)
+    private static object? ConvertToNative(BsonValue value)
     {
-        if (value.IsNull)
-        {
-            return null;
-        }
+        if (value.IsNull) return null;
 
         if (value.IsDocument)
         {
-            return value.AsDocument.ToDictionary(kvp => kvp.Key, kvp => ToNative(kvp.Value));
+            return value.AsDocument.ToDictionary(
+                kvp => kvp.Key,
+                kvp => ConvertToNative(kvp.Value)
+            );
         }
 
         if (value.IsArray)
         {
-            return value.AsArray.Select(ToNative).ToArray();
+            return value.AsArray.Select(ConvertToNative).ToArray();
         }
 
         return BsonMapper.Global.Serialize(value).RawValue;
     }
 
-    private static void Write(BridgeResponse response)
+    private static void WriteResponse(BridgeResponse response)
     {
-        Console.WriteLine(JsonSerializer.Serialize(response, new JsonSerializerOptions
+        try
         {
-            PropertyNamingPolicy = JsonNamingPolicy.CamelCase
-        }));
+            var json = JsonSerializer.Serialize(response, _jsonOptions);
+            Console.WriteLine(json);
+            Console.Out.Flush();
+        }
+        catch (Exception ex)
+        {
+            LogError($"Error writing response: {ex.Message}");
+        }
+    }
+
+    private static void LogInfo(string message)
+    {
+        Console.Error.WriteLine($"[INFO] {DateTime.Now:yyyy-MM-dd HH:mm:ss} - {message}");
+    }
+
+    private static void LogError(string message)
+    {
+        Console.Error.WriteLine($"[ERROR] {DateTime.Now:yyyy-MM-dd HH:mm:ss} - {message}");
     }
 }
