@@ -18,6 +18,7 @@ INSERT INTO orders:GUID VALUES { "item": "Book", "qty": 2 }, { "item": "Pen", "q
 
 ## UPDATE
 ```sql
+UPDATE customers SET Name = LOWER($.Name) WHERE _id = 1
 UPDATE customers SET age = 31 WHERE name = "John"
 UPDATE products SET price = 8.99 WHERE name = "Book"
 ```

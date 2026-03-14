@@ -20,6 +20,8 @@ public static class Program
         string? line;
         while ((line = Console.ReadLine()) != null)
         {
+            // Log the received line for debugging
+            Console.Error.WriteLine($"[LiteDbBridge] Received: {line}");
             try
             {
                 if (string.IsNullOrWhiteSpace(line))

@@ -6,15 +6,37 @@ export type QueryResult = {
 };
 
 export function renderCollectionGrid(collectionName: string, result: QueryResult): string {
+
+    // Helper to escape HTML
     const escapeHtml = (value: unknown): string => String(value ?? '')
         .replace(/&/g, '&amp;')
         .replace(/</g, '&lt;')
         .replace(/>/g, '&gt;');
 
+    // Helper to format _id as BSON ObjectId if it matches 24 hex chars
+    function formatIdBson(id: unknown): string {
+        if (typeof id === 'string' && /^[a-fA-F0-9]{24}$/.test(id)) {
+            return escapeHtml(JSON.stringify({ $oid: id }));
+        }
+        return escapeHtml(id);
+    }
+
     const header = result.columns.map((c) => `<th>${escapeHtml(c)}</th>`).join('');
     const rows = result.rows.map((r, i) => {
         const rowNumber = i + 1;
-        const cells = result.columns.map((c) => `<td>${escapeHtml(r[c])}</td>`).join('');
+        // Add data-id attribute for the _id value
+        const idValue = r['_id'] !== undefined ? String(r['_id']) : '';
+        const cells = result.columns.map((c) => {
+            // For _id column, show as BSON if it matches ObjectId
+            let displayValue;
+            if (c === '_id') {
+                displayValue = formatIdBson(r[c]);
+            } else {
+                displayValue = escapeHtml(r[c]);
+            }
+            // Add data attributes for row, column, and id
+            return `<td data-row="${i}" data-col="${escapeHtml(c)}" data-id="${escapeHtml(idValue)}" tabindex="0">${displayValue}</td>`;
+        }).join('');
         return `<tr><td class="row-number">${rowNumber}</td>${cells}</tr>`;
     }).join('');
 
@@ -118,6 +140,46 @@ th.row-number {
         const vscode = acquireVsCodeApi();
         document.getElementById('refresh-collection-btn')?.addEventListener('click', () => {
             vscode.postMessage({ command: 'refreshCollection', collection: ${JSON.stringify(collectionName)} });
+        });
+
+        // Cell editing logic
+        document.querySelectorAll('td[data-row][data-col]').forEach(td => {
+            td.addEventListener('click', function (e) {
+                if (td.querySelector('input')) return; // already editing
+                const oldValue = td.textContent;
+                const input = document.createElement('input');
+                input.type = 'text';
+                input.value = oldValue;
+                input.style.width = '100%';
+                input.style.boxSizing = 'border-box';
+                td.textContent = '';
+                td.appendChild(input);
+                input.focus();
+                input.select();
+
+                // Handle Enter and Escape
+                input.addEventListener('keydown', function(ev) {
+                    if (ev.key === 'Enter') {
+                        const newValue = input.value;
+                        td.textContent = newValue;
+                        // Send update message with _id
+                        vscode.postMessage({
+                            command: 'updateCell',
+                            collection: ${JSON.stringify(collectionName)},
+                            _id: td.getAttribute('data-id'),
+                            column: td.getAttribute('data-col'),
+                            value: newValue
+                        });
+                    } else if (ev.key === 'Escape') {
+                        td.textContent = oldValue;
+                    }
+                });
+
+                // Blur restores value
+                input.addEventListener('blur', function() {
+                    td.textContent = input.value;
+                });
+            });
         });
     </script>
 </body>

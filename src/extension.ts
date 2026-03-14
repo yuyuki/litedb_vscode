@@ -4,47 +4,9 @@ import * as path from 'path';
 import { LiteDbCompletionProvider } from './completionProvider';
 import { DotnetBridgeManager, BridgeResponse } from './dotnetBridgeManager';
 import { renderCollectionGrid, QueryResult } from './gridRenderer';
+import { getLiteDbIdExpr } from './queryHelpers';
 
-
-// QueryResult and renderCollectionGrid are now imported from gridRenderer.ts
-
-class LiteDbState {
-    private _dbPath: string | undefined;
-    private _childProcesses: Set<import('child_process').ChildProcess> = new Set();
-
-    public get dbPath(): string | undefined {
-        return this._dbPath;
-    }
-
-
-    public open(dbPath: string): void {
-        this._dbPath = dbPath;
-    }
-
-    public addChildProcess(child: import('child_process').ChildProcess) {
-        this._childProcesses.add(child);
-        child.on('exit', () => this._childProcesses.delete(child));
-        child.on('close', () => this._childProcesses.delete(child));
-    }
-
-    public close(): void {
-        this._dbPath = undefined;
-        this.cleanupChildProcesses();
-    }
-
-    public cleanupChildProcesses(): void {
-        for (const child of this._childProcesses) {
-            if (!child.killed) {
-                try { child.kill(); } catch {}
-            }
-        }
-        this._childProcesses.clear();
-    }
-
-    public isOpen(): boolean {
-        return !!this._dbPath;
-    }
-}
+import { LiteDbState } from './LiteDbState';
 
 class CollectionItem extends vscode.TreeItem {
     constructor(public readonly name: string) {
@@ -107,7 +69,7 @@ class LiteDbCollectionsProvider implements vscode.TreeDataProvider<CollectionIte
                 if (retryResponse.success && retryResponse.data) {
                     // Retry succeeded, reset counter
                     this.retryCount.delete(dbPath);
-                    return retryResponse.data.map((name) => new CollectionItem(name));
+                    return retryResponse.data.map((name: string) => new CollectionItem(name));
                 }
             }
             
@@ -126,7 +88,7 @@ class LiteDbCollectionsProvider implements vscode.TreeDataProvider<CollectionIte
 
         // Success: reset retry counter for this database
         this.retryCount.delete(dbPath);
-        return response.data.map((name) => new CollectionItem(name));
+    return response.data.map((name: string) => new CollectionItem(name));
     }
 }
 
@@ -558,6 +520,34 @@ export function activate(context: vscode.ExtensionContext): void {
                     panel.webview.html = renderCollectionGrid(collection.name, refreshResponse.data);
                 } else {
                     vscode.window.showErrorMessage(`Unable to refresh collection "${collection.name}": ${refreshResponse.error ?? 'Unknown error'}`);
+                }
+            } else if (msg && msg.command === 'updateCell' && msg.collection === collection.name) {
+                // Build the UPDATE query
+                const col = msg.column;
+                const val = msg.value;
+                const id = msg._id;
+                // Use parameterized/escaped value for string
+                const valueExpr = typeof val === 'string' ? `'${val.replace(/'/g, "''")}'` : val;
+                // Always use ObjectId for _id in WHERE clause
+                const idExpr = `ObjectId('${id}')`;
+                const updateQuery = `UPDATE ${collection.name} SET ${col} = ${valueExpr} WHERE _id = ${idExpr}`;
+                const updateResp = await runBridge<QueryResult>(context.extensionPath, {
+                    command: 'query',
+                    dbPath: state.dbPath,
+                    query: updateQuery
+                });
+                if (!updateResp.success) {
+                    vscode.window.showErrorMessage(`Update failed: ${updateResp.error ?? 'Unknown error'}`);
+                } else {
+                    // Optionally, refresh the grid after update
+                    const refreshResponse = await runBridge<QueryResult>(context.extensionPath, {
+                        command: 'query',
+                        dbPath: state.dbPath,
+                        query: `SELECT * FROM ${collection.name}`
+                    });
+                    if (refreshResponse.success && refreshResponse.data) {
+                        panel.webview.html = renderCollectionGrid(collection.name, refreshResponse.data);
+                    }
                 }
             }
         });
