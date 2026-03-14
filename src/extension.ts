@@ -601,7 +601,12 @@ export function activate(context: vscode.ExtensionContext): void {
                 vscode.window.showWarningMessage('No active editor.');
                 return;
             }
-            const script = editor.document.getText();
+            let script = '';
+            if (editor.selection && !editor.selection.isEmpty) {
+                script = editor.document.getText(editor.selection);
+            } else {
+                script = editor.document.getText();
+            }
             if (!script.trim()) {
                 vscode.window.showWarningMessage('Script is empty.');
                 return;
@@ -621,7 +626,7 @@ export function activate(context: vscode.ExtensionContext): void {
             resultViewProvider.showResult('Query Result', response.data);
             // Only refresh collections if the script contains INSERT or DELETE
             if (/\b(INSERT|DELETE)\b/i.test(script)) {
-            provider.refresh();
+                provider.refresh();
                 await completionProvider.refreshCollections();
             }
         });
