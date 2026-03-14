@@ -474,7 +474,10 @@ export function activate(context: vscode.ExtensionContext): void {
             return response.success && response.data ? response.data : [];
         }
     );
-    
+
+    // Pre-load completion collections cache on extension activation
+    completionProvider.refreshCollections();
+
     context.subscriptions.push(
         vscode.languages.registerCompletionItemProvider('litedb', completionProvider, ' ')
     );
