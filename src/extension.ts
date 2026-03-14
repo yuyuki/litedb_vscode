@@ -390,7 +390,7 @@ export function activate(context: vscode.ExtensionContext): void {
             canSelectFiles: true,
             canSelectMany: false,
             openLabel: 'Open LiteDB',
-            filters: { 'LiteDB files': ['db'], 'All files': ['*'] }
+                filters: { 'LiteDB files': ['litedb'], 'All files': ['*'] }
         });
 
         if (!pick || pick.length === 0) {
