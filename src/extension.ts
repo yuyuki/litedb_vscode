@@ -539,10 +539,28 @@ export function activate(context: vscode.ExtensionContext): void {
             'litedbCollectionResult',
             `LiteDB: ${collection.name}`,
             vscode.ViewColumn.One,
-            {}
+            { enableScripts: true }
         );
 
+        // Initial render
         panel.webview.html = renderCollectionGrid(collection.name, response.data);
+
+        // Listen for refreshCollection message from the webview
+        panel.webview.onDidReceiveMessage(async (msg) => {
+            if (msg && msg.command === 'refreshCollection' && msg.collection === collection.name) {
+                // Re-run the query and update the grid
+                const refreshResponse = await runBridge<QueryResult>(context.extensionPath, {
+                    command: 'query',
+                    dbPath: state.dbPath,
+                    query: `SELECT * FROM ${collection.name}`
+                });
+                if (refreshResponse.success && refreshResponse.data) {
+                    panel.webview.html = renderCollectionGrid(collection.name, refreshResponse.data);
+                } else {
+                    vscode.window.showErrorMessage(`Unable to refresh collection "${collection.name}": ${refreshResponse.error ?? 'Unknown error'}`);
+                }
+            }
+        });
     }));
 
     // Register Help command to open HELP.md as markdown

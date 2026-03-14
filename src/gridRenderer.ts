@@ -22,6 +22,7 @@ export function renderCollectionGrid(collectionName: string, result: QueryResult
 <html>
 <head>
 <meta charset="utf-8" />
+<link rel="stylesheet" href="https://microsoft.github.io/vscode-codicons/dist/codicon.css">
 <style>
 body {
     margin: 0;
@@ -35,7 +36,29 @@ body {
     color: var(--vscode-descriptionForeground);
     padding: 12px 12px 0 12px;
     font-size: 1.1em;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
 }
+.refresh-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 0 2px;
+    display: flex;
+    align-items: center;
+    opacity: 0.7;
+    transition: opacity 0.2s;
+}
+.refresh-btn:hover {
+    opacity: 1;
+}
+    .codicon {
+        font-size: 18px;
+        color: var(--vscode-icon-foreground, var(--vscode-descriptionForeground));
+        display: block;
+    }
 .grid {
     border: 1px solid var(--vscode-panel-border);
     overflow: auto;
@@ -72,10 +95,15 @@ th.row-number {
     color: var(--vscode-descriptionForeground);
     padding: 12px;
 }
-</style>
+    </style>
 </head>
 <body>
-    <div class="collection-name">Collection: <strong>${escapeHtml(collectionName)}</strong></div>
+    <div class="collection-name">
+        <span>Collection: <strong>${escapeHtml(collectionName)}</strong></span>
+        <button class="refresh-btn" id="refresh-collection-btn" title="Refresh">
+            <span class="codicon codicon-refresh"></span>
+        </button>
+    </div>
     <div class="grid">
         <table>
             <thead>
@@ -86,6 +114,12 @@ th.row-number {
             </tbody>
         </table>
     </div>
+    <script>
+        const vscode = acquireVsCodeApi();
+        document.getElementById('refresh-collection-btn')?.addEventListener('click', () => {
+            vscode.postMessage({ command: 'refreshCollection', collection: ${JSON.stringify(collectionName)} });
+        });
+    </script>
 </body>
 </html>`;
 }
