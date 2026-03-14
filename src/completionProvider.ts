@@ -43,7 +43,8 @@ export class LiteDbCompletionProvider implements vscode.CompletionItemProvider {
                             'EXPLAIN', 'SELECT', 'INTO', 'FROM', 'INCLUDE', 'WHERE', 'GROUP BY', 'HAVING', 'ORDER BY', 'LIMIT', 'OFFSET', 'FOR UPDATE',
                             'INSERT INTO', 'VALUES',
                             'UPDATE', 'SET',
-                            'DELETE'
+                            'DELETE',
+                            'DESC', 'ASC'
                         ];
                         this.allKeywords = keywords.map((kw, i) => {
                             const item = new vscode.CompletionItem(kw, vscode.CompletionItemKind.Keyword);
