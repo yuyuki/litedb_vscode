@@ -32,6 +32,13 @@
         "configuration": "./language-configuration.json"
       }
     ],
+    "grammars": [
+      {
+        "language": "litedb",
+        "scopeName": "source.litedb",
+        "path": "./litedb.tmLanguage.json"
+      }
+    ],
     "commands": [
       {
         "command": "litedb.openDatabase",

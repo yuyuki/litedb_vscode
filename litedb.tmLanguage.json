@@ -1,0 +1,52 @@
+{
+  "scopeName": "source.litedb",
+  "patterns": [
+    {
+      "name": "string.quoted.triple.litedb",
+      "begin": "'''",
+      "end": "'''",
+      "patterns": [
+        {
+          "include": "#inside-string"
+        }
+      ]
+    },
+    {
+      "name": "string.quoted.single.litedb",
+      "match": "'[^']*'",
+      "captures": {
+        "0": { "name": "string.quoted.single.litedb" }
+      }
+    },
+    {
+      "name": "constant.numeric.litedb",
+      "match": "\\b\\d+\\b"
+    },
+    {
+      "name": "keyword.control.litedb",
+      "match": "\\b(SELECT|FROM|WHERE|ORDER BY|AS|WITH|CASE|WHEN|THEN|ELSE|END|AND|OR|NOT|IN|ON|JOIN|LEFT|RIGHT|INNER|OUTER|GROUP BY|LIMIT|INSERT|DELETE|UPDATE|VALUES|SET|DISTINCT|BY)\\b"
+    },
+    {
+      "name": "variable.other.litedb",
+      "match": "\\b[a-zA-Z_][a-zA-Z0-9_]*\\b"
+    },
+    {
+      "name": "keyword.operator.litedb",
+      "match": "(=|<|>|<=|>=|<>|!=|\\+|\\-|\\*|\\/)"
+    },
+    {
+      "name": "support.function.litedb",
+      "match": "\\b(CASE|COUNT|SUM|AVG|MIN|MAX|UPPER|LOWER|LENGTH)\\b"
+    }
+  ],
+  "repository": {
+    "inside-string": {
+      "patterns": [
+        {
+          "name": "constant.character.escape.litedb",
+          "match": "\\\\."
+        }
+      ]
+    }
+  }
+}
