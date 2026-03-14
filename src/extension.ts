@@ -132,6 +132,12 @@ class LiteDbCollectionsProvider implements vscode.TreeDataProvider<CollectionIte
 }
 
 class LiteDbResultViewProvider implements vscode.WebviewViewProvider {
+    clearView(): void {
+        this._currentHtml = this.getEmptyHtml();
+        if (this._view) {
+            this._view.webview.html = this._currentHtml;
+        }
+    }
     private _view?: vscode.WebviewView;
     private _currentHtml: string = '';
 
@@ -596,6 +602,8 @@ export function activate(context: vscode.ExtensionContext): void {
                 query: script
             });
             if (!response.success || !response.data) {
+                // Hide the loading message
+                resultViewProvider.clearView();
                 vscode.window.showErrorMessage(`Query failed: ${response.error ?? 'Unknown error'}`);
                 // Optionally, keep the loading or show empty state
                 return;
