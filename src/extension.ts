@@ -16,17 +16,35 @@ type QueryResult = {
 
 class LiteDbState {
     private _dbPath: string | undefined;
+    private _childProcesses: Set<import('child_process').ChildProcess> = new Set();
 
     public get dbPath(): string | undefined {
         return this._dbPath;
     }
 
+
     public open(dbPath: string): void {
         this._dbPath = dbPath;
     }
 
+    public addChildProcess(child: import('child_process').ChildProcess) {
+        this._childProcesses.add(child);
+        child.on('exit', () => this._childProcesses.delete(child));
+        child.on('close', () => this._childProcesses.delete(child));
+    }
+
     public close(): void {
         this._dbPath = undefined;
+        this.cleanupChildProcesses();
+    }
+
+    public cleanupChildProcesses(): void {
+        for (const child of this._childProcesses) {
+            if (!child.killed) {
+                try { child.kill(); } catch {}
+            }
+        }
+        this._childProcesses.clear();
     }
 
     public isOpen(): boolean {
@@ -227,29 +245,28 @@ body {
 
 async function runBridge<T>(extensionPath: string, payload: unknown): Promise<BridgeResponse<T>> {
     const projectPath = path.join(extensionPath, 'backend', 'LiteDbBridge', 'LiteDbBridge.csproj');
-
+    // Use global state if available
+    const state = (globalThis as any).litedbState as LiteDbState | undefined;
     return new Promise((resolve) => {
         const child = spawn('dotnet', ['run', '--project', projectPath, '--', JSON.stringify(payload)], {
             cwd: extensionPath
         });
-
+        if (state && typeof state.addChildProcess === 'function') {
+            state.addChildProcess(child);
+        }
         let stdout = '';
         let stderr = '';
-
         child.stdout.on('data', (d) => {
             stdout += d.toString();
         });
-
         child.stderr.on('data', (d) => {
             stderr += d.toString();
         });
-
         child.on('close', () => {
             if (stderr.trim().length > 0 && stdout.trim().length === 0) {
                 resolve({ success: false, error: stderr.trim() });
                 return;
             }
-
             try {
                 const parsed = JSON.parse(stdout) as BridgeResponse<T>;
                 resolve(parsed);
@@ -520,6 +537,7 @@ export function activate(context: vscode.ExtensionContext): void {
                 return;
             }
 
+            // Only open and show info if validation succeeded
             state.open(dbPath);
             provider.refresh();
             await completionProvider.refreshCollections();
@@ -654,4 +672,8 @@ export function activate(context: vscode.ExtensionContext): void {
     }));
 }
 
-export function deactivate(): void {}
+export function deactivate(): void {
+    if ((globalThis as any).litedbState && typeof (globalThis as any).litedbState.close === 'function') {
+        (globalThis as any).litedbState.close();
+    }
+}
