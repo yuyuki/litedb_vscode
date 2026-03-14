@@ -542,57 +542,68 @@ export function activate(context: vscode.ExtensionContext): void {
     }));
 
     context.subscriptions.push(vscode.commands.registerCommand('litedb.runQuery', async () => {
-        if (!state.dbPath) {
-            vscode.window.showWarningMessage('Open a LiteDB database first.');
-            return;
-        }
+        await vscode.window.withProgress({
+            location: vscode.ProgressLocation.Notification,
+            title: 'Opening query editor...',
+        }, async () => {
+            if (!state.dbPath) {
+                vscode.window.showWarningMessage('Open a LiteDB database first.');
+                return;
+            }
 
-        // Refresh collections cache before opening the query editor
-        await completionProvider.refreshCollections();
+            // Refresh collections cache before opening the query editor
+            await completionProvider.refreshCollections();
 
-        // Create a new untitled document with LiteDB language
-        const doc = await vscode.workspace.openTextDocument({
-            language: 'litedb',
-            content: '-- Enter your LiteDB SQL query here\n-- Example: SELECT * FROM customers LIMIT 20\n\n'
+            // Create a new untitled document with LiteDB language
+            const doc = await vscode.workspace.openTextDocument({
+                language: 'litedb',
+                content: '-- Enter your LiteDB SQL query here\n-- Example: SELECT * FROM customers LIMIT 20\n\n'
+            });
+
+            await vscode.window.showTextDocument(doc, vscode.ViewColumn.One);
         });
-
-        await vscode.window.showTextDocument(doc, vscode.ViewColumn.One);
     }));
 
     // Command to execute the current script and show results in a Webview Panel
     context.subscriptions.push(vscode.commands.registerCommand('litedb.executeScript', async () => {
-        if (!state.dbPath) {
-            vscode.window.showWarningMessage('Open a LiteDB database first.');
-            return;
-        }
-        const editor = vscode.window.activeTextEditor;
-        if (!editor) {
-            vscode.window.showWarningMessage('No active editor.');
-            return;
-        }
-        const script = editor.document.getText();
-        if (!script.trim()) {
-            vscode.window.showWarningMessage('Script is empty.');
-            return;
-        }
-        // Show loading/progress in result view
-        resultViewProvider.showLoading('Query in progress...');
-        const response = await runBridge<QueryResult>(context.extensionPath, {
-            command: 'query',
-            dbPath: state.dbPath,
-            query: script
+        await vscode.window.withProgress({
+            location: vscode.ProgressLocation.Notification,
+            title: 'Running query...',
+            cancellable: false
+        }, async (progress) => {
+            if (!state.dbPath) {
+                vscode.window.showWarningMessage('Open a LiteDB database first.');
+                return;
+            }
+            const editor = vscode.window.activeTextEditor;
+            if (!editor) {
+                vscode.window.showWarningMessage('No active editor.');
+                return;
+            }
+            const script = editor.document.getText();
+            if (!script.trim()) {
+                vscode.window.showWarningMessage('Script is empty.');
+                return;
+            }
+            // Show loading/progress in result view
+            resultViewProvider.showLoading('Query in progress...');
+            const response = await runBridge<QueryResult>(context.extensionPath, {
+                command: 'query',
+                dbPath: state.dbPath,
+                query: script
+            });
+            if (!response.success || !response.data) {
+                vscode.window.showErrorMessage(`Query failed: ${response.error ?? 'Unknown error'}`);
+                // Optionally, keep the loading or show empty state
+                return;
+            }
+            resultViewProvider.showResult('Query Result', response.data);
+            // Only refresh collections if the script contains INSERT or DELETE
+            if (/\b(INSERT|DELETE)\b/i.test(script)) {
+                provider.refresh();
+                await completionProvider.refreshCollections();
+            }
         });
-        if (!response.success || !response.data) {
-            vscode.window.showErrorMessage(`Query failed: ${response.error ?? 'Unknown error'}`);
-            // Optionally, keep the loading or show empty state
-            return;
-        }
-        resultViewProvider.showResult('Query Result', response.data);
-        // Only refresh collections if the script contains INSERT or DELETE
-        if (/\b(INSERT|DELETE)\b/i.test(script)) {
-            provider.refresh();
-            await completionProvider.refreshCollections();
-        }
     }));
 
     context.subscriptions.push(vscode.commands.registerCommand('litedb.openCollection', async (collection: CollectionItem) => {
