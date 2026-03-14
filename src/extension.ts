@@ -1,13 +1,8 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
-import { spawn } from 'child_process';
 import { LiteDbCompletionProvider } from './completionProvider';
+import { DotnetBridgeManager, BridgeResponse } from './dotnetBridgeManager';
 
-type BridgeResponse<T> = {
-    success: boolean;
-    error?: string;
-    data?: T;
-};
 
 type QueryResult = {
     columns: string[];
@@ -243,38 +238,18 @@ body {
     }
 }
 
+
+let dotnetBridgeManager: DotnetBridgeManager | undefined;
+
 async function runBridge<T>(extensionPath: string, payload: unknown): Promise<BridgeResponse<T>> {
-    const projectPath = path.join(extensionPath, 'backend', 'LiteDbBridge', 'LiteDbBridge.csproj');
-    // Use global state if available
-    const state = (globalThis as any).litedbState as LiteDbState | undefined;
-    return new Promise((resolve) => {
-        const child = spawn('dotnet', ['run', '--project', projectPath, '--', JSON.stringify(payload)], {
-            cwd: extensionPath
-        });
-        if (state && typeof state.addChildProcess === 'function') {
-            state.addChildProcess(child);
-        }
-        let stdout = '';
-        let stderr = '';
-        child.stdout.on('data', (d) => {
-            stdout += d.toString();
-        });
-        child.stderr.on('data', (d) => {
-            stderr += d.toString();
-        });
-        child.on('close', () => {
-            if (stderr.trim().length > 0 && stdout.trim().length === 0) {
-                resolve({ success: false, error: stderr.trim() });
-                return;
-            }
-            try {
-                const parsed = JSON.parse(stdout) as BridgeResponse<T>;
-                resolve(parsed);
-            } catch {
-                resolve({ success: false, error: `Unable to parse bridge response. stderr=${stderr}` });
-            }
-        });
-    });
+    if (!dotnetBridgeManager) {
+        dotnetBridgeManager = new DotnetBridgeManager(extensionPath);
+    }
+    try {
+        return await dotnetBridgeManager.send<T>(payload);
+    } catch (e) {
+        return { success: false, error: String(e) };
+    }
 }
 
 function renderTable(title: string, subtitleLabel: string, subtitleValue: string, result: QueryResult): string {
@@ -466,7 +441,9 @@ th.row-number {
 </html>`;
 }
 
+
 export function activate(context: vscode.ExtensionContext): void {
+    dotnetBridgeManager = new DotnetBridgeManager(context.extensionPath);
 
     const state = new LiteDbState();
     const provider = new LiteDbCollectionsProvider(state, context.extensionPath);
@@ -677,7 +654,12 @@ export function activate(context: vscode.ExtensionContext): void {
     }));
 }
 
+
 export function deactivate(): void {
+    if (dotnetBridgeManager) {
+        dotnetBridgeManager.dispose();
+        dotnetBridgeManager = undefined;
+    }
     if ((globalThis as any).litedbState && typeof (globalThis as any).litedbState.close === 'function') {
         (globalThis as any).litedbState.close();
     }

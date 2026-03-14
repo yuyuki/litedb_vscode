@@ -8,43 +8,75 @@ using JsonNamingPolicy = System.Text.Json.JsonNamingPolicy;
 public sealed record BridgeRequest(string Command, string DbPath, string? Query);
 public sealed record BridgeResponse(bool Success, object? Data = null, string? Error = null);
 
+
 public static class Program
 {
+    // Cache LiteDatabase instances by file path
+    private static readonly Dictionary<string, LiteDatabase> _dbCache = new(StringComparer.OrdinalIgnoreCase);
+
     public static int Main(string[] args)
     {
-        try
+        AppDomain.CurrentDomain.ProcessExit += (_, __) => CloseAllDbs();
+        string? line;
+        while ((line = Console.ReadLine()) != null)
         {
-            if (args.Length == 0)
+            try
             {
-                Write(new BridgeResponse(false, Error: "Missing request payload"));
-                return 1;
+                if (string.IsNullOrWhiteSpace(line))
+                {
+                    Write(new BridgeResponse(false, Error: "Missing request payload"));
+                    continue;
+                }
+
+                var request = JsonSerializer.Deserialize<BridgeRequest>(line, new JsonSerializerOptions
+                {
+                    PropertyNameCaseInsensitive = true
+                });
+
+                if (request is null)
+                {
+                    Write(new BridgeResponse(false, Error: "Invalid request payload"));
+                    continue;
+                }
+
+                var command = request.Command.ToLowerInvariant();
+                int result = command switch
+                {
+                    "collections" => Collections(request),
+                    "fields" => Fields(request),
+                    "query" => Query(request),
+                    _ => Unknown(request.Command)
+                };
+                // Optionally, you can break on error, but for now, keep looping
             }
-
-// deserialize using System.Text.Json (alias avoids ambiguity with LiteDB.JsonSerializer)
-        var request = JsonSerializer.Deserialize<BridgeRequest>(args[0], new JsonSerializerOptions
+            catch (Exception ex)
             {
-                PropertyNameCaseInsensitive = true
-            });
-
-            if (request is null)
-            {
-                Write(new BridgeResponse(false, Error: "Invalid request payload"));
-                return 1;
+                Write(new BridgeResponse(false, Error: ex.Message));
             }
-
-            return request.Command.ToLowerInvariant() switch
-            {
-                "collections" => Collections(request),
-                "fields" => Fields(request),
-                "query" => Query(request),
-                _ => Unknown(request.Command)
-            };
         }
-        catch (Exception ex)
+        CloseAllDbs();
+        return 0;
+    }
+
+    private static LiteDatabase GetDb(string dbPath)
+    {
+        if (_dbCache.TryGetValue(dbPath, out var db))
         {
-            Write(new BridgeResponse(false, Error: ex.Message));
-            return 1;
+            return db;
         }
+        var connectionString = $"Filename={dbPath};Mode=Shared";
+        db = new LiteDatabase(connectionString);
+        _dbCache[dbPath] = db;
+        return db;
+    }
+
+    private static void CloseAllDbs()
+    {
+        foreach (var db in _dbCache.Values)
+        {
+            db.Dispose();
+        }
+        _dbCache.Clear();
     }
 
     private static int Unknown(string command)
@@ -55,8 +87,7 @@ public static class Program
 
     private static int Collections(BridgeRequest request)
     {
-        var connectionString = $"Filename={request.DbPath};Mode=Shared";
-        using var db = new LiteDatabase(connectionString);
+        var db = GetDb(request.DbPath);
         var names = db.GetCollectionNames().ToArray();
         Write(new BridgeResponse(true, Data: names));
         return 0;
@@ -70,10 +101,8 @@ public static class Program
             return 1;
         }
 
-        var connectionString = $"Filename={request.DbPath};Mode=Shared";
-        using var db = new LiteDatabase(connectionString);
+        var db = GetDb(request.DbPath);
         var collectionName = request.Query;
-        
         // Check if collection exists
         if (!db.CollectionExists(collectionName))
         {
@@ -82,10 +111,8 @@ public static class Program
         }
 
         var collection = db.GetCollection(collectionName);
-        
         // Get all distinct field names from the collection
         var fields = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        
         foreach (var doc in collection.FindAll())
         {
             foreach (var key in doc.Keys)
@@ -93,7 +120,6 @@ public static class Program
                 fields.Add(key);
             }
         }
-        
         Write(new BridgeResponse(true, Data: fields.OrderBy(f => f).ToArray()));
         return 0;
     }
@@ -106,8 +132,7 @@ public static class Program
             return 1;
         }
 
-        var connectionString = $"Filename={request.DbPath};Mode=Shared";
-        using var db = new LiteDatabase(connectionString);
+        var db = GetDb(request.DbPath);
         // execute query and normalize records into grid rows
         var result = db.Execute(request.Query).ToList();
         var rows = result
