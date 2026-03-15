@@ -261,7 +261,7 @@ public static class Program
         }
     }
 
-    private static IEnumerable<IDictionary<string, string>> ExpandToRows(BsonValue value)
+    private static IEnumerable<IDictionary<string, object?>> ExpandToRows(BsonValue value)
     {
         if (value.IsDocument)
         {
@@ -273,13 +273,13 @@ public static class Program
             return value.AsArray.SelectMany(ExpandToRows);
         }
 
-        return new[] { new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) 
+        return new[] { new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase) 
         { 
-            ["value"] = FormatValue(value) 
+            ["value"] = ConvertToNative(value) 
         }};
     }
 
-    private static IEnumerable<IDictionary<string, string>> ExpandDocument(BsonDocument doc)
+    private static IEnumerable<IDictionary<string, object?>> ExpandDocument(BsonDocument doc)
     {
         // If document has single array field, expand it
         if (doc.Count == 1)
@@ -291,47 +291,35 @@ public static class Program
             }
         }
 
-        var row = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        var row = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase);
         foreach (var key in doc.Keys)
         {
             var bsonValue = doc[key];
-            // Log the type for debugging
-            if (key.Equals("price", StringComparison.OrdinalIgnoreCase))
-            {
-                LogInfo($"Field 'price' type: {bsonValue.Type}, IsString: {bsonValue.IsString}, IsNumber: {bsonValue.IsInt32 || bsonValue.IsInt64 || bsonValue.IsDouble || bsonValue.IsDecimal}");
-            }
-            row[key] = FormatValue(bsonValue);
+            row[key] = ConvertToNative(bsonValue);
         }
 
-        return new[] { (IDictionary<string, string>)row };
-    }
-
-    private static string FormatValue(BsonValue value)
-    {
-        if (value.IsNull)
-        {
-            return string.Empty;
-        }
-
-        if (value.IsArray || value.IsDocument)
-        {
-            return JsonSerializer.Serialize(ConvertToNative(value));
-        }
-
-        // Format strings with quotes to distinguish them from numbers
-        if (value.IsString)
-        {
-            return $"\"{value.AsString}\"";
-        }
-
-        // For other types (numbers, booleans, etc.), return as-is
-        var rawValue = BsonMapper.Global.Serialize(value).RawValue;
-        return rawValue?.ToString() ?? string.Empty;
+        return new[] { (IDictionary<string, object?>)row };
     }
 
     private static object? ConvertToNative(BsonValue value)
     {
         if (value.IsNull) return null;
+
+        // Handle BSON special types - return them in BSON format
+        if (value.IsObjectId)
+        {
+            return new Dictionary<string, object> { ["$oid"] = value.AsObjectId.ToString() };
+        }
+
+        if (value.IsGuid)
+        {
+            return new Dictionary<string, object> { ["$guid"] = value.AsGuid.ToString() };
+        }
+
+        if (value.IsDateTime)
+        {
+            return new Dictionary<string, object> { ["$date"] = value.AsDateTime.ToString("o") };
+        }
 
         if (value.IsDocument)
         {
@@ -346,6 +334,7 @@ public static class Program
             return value.AsArray.Select(ConvertToNative).ToArray();
         }
 
+        // For primitive types (string, number, boolean), return the raw value
         return BsonMapper.Global.Serialize(value).RawValue;
     }
 

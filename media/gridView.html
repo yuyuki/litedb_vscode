@@ -88,6 +88,12 @@
             color: var(--vscode-descriptionForeground);
             padding: 12px;
         }
+
+        td[data-readonly="true"] {
+            background: var(--vscode-editorGutter-background, var(--vscode-sideBar-background));
+            cursor: not-allowed;
+            opacity: 0.8;
+        }
     </style>
 </head>
 
@@ -119,8 +125,11 @@
         // Cell editing logic
         document.querySelectorAll('td[data-row][data-col]').forEach(td => {
             td.addEventListener('click', function (e) {
+                // Don't allow editing of _id column
+                if (td.getAttribute('data-readonly') === 'true') return;
                 if (td.querySelector('input')) return; // already editing
                 const oldValue = td.textContent;
+                const dataType = td.getAttribute('data-type');
                 const input = document.createElement('input');
                 input.type = 'text';
                 input.value = oldValue;
@@ -134,8 +143,20 @@
                 // Handle Enter and Escape
                 input.addEventListener('keydown', function (ev) {
                     if (ev.key === 'Enter') {
-                        const newValue = input.value;
-                        td.textContent = newValue;
+                        let newValue = input.value;
+                        // Type-preserving conversion
+                        if (dataType === 'number' && newValue !== '' && !isNaN(Number(newValue))) {
+                            newValue = Number(newValue);
+                        } else if (dataType === 'bson') {
+                            newValue = { $oid: newValue };
+                        } else if (dataType === 'guid') {
+                            // Optionally validate GUID format here
+                            newValue = newValue;
+                        } else if (dataType === 'date') {
+                            // Send as ISO string (LiteDB will interpret as DateTime)
+                            newValue = newValue;
+                        }
+                        td.textContent = input.value;
                         // Send update message with _id
                         vscode.postMessage({
                             command: 'updateCell',

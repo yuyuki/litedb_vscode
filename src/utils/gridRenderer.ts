@@ -3,7 +3,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { QueryResult } from '../types';
-import { escapeHtml, formatIdAsBson } from './stringUtils';
+import { escapeHtml } from './stringUtils';
 
 // Cache the HTML template
 let htmlTemplate: string | null = null;
@@ -63,23 +63,70 @@ export function renderCollectionGrid(collectionName: string, result: QueryResult
 
 function renderRow(row: Record<string, unknown>, columns: string[], index: number): string {
     // Store _id value for update operations
-    // If _id is already a BSON object {$oid: "..."}, extract the $oid value
-    // Otherwise, store the raw value
+    // If _id is a BSON object {$oid: "..."}, extract the $oid value
+    // If _id is a plain ObjectId string (24 hex chars), store it as-is
+    // Otherwise, store the raw value as string
     let idValue = '';
     if (row['_id'] !== undefined) {
         const id = row['_id'];
         if (typeof id === 'object' && id !== null && '$oid' in id) {
+            // Extract ObjectId from BSON format {$oid: "..."}
             idValue = (id as any).$oid;
+        } else if (typeof id === 'string' && /^[a-fA-F0-9]{24}$/.test(id)) {
+            // Plain ObjectId string (24 hex characters)
+            idValue = id;
         } else {
+            // Other types (string, number, etc.)
             idValue = String(id);
         }
     }
-    
+
     const cells = columns.map(col => {
         const value = row[col];
-        const displayValue = col === '_id' ? formatIdAsBson(value) : escapeHtml(value);
-        
-        return `<td data-row="${index}" data-col="${escapeHtml(col)}" data-id="${escapeHtml(idValue)}" tabindex="0">${displayValue}</td>`;
+        let type = 'string';
+        let isReadonly = false;
+        let displayValue: string;
+
+        // Check if value is already in BSON format (object with special keys)
+        if (typeof value === 'object' && value !== null) {
+            if ('$oid' in value) {
+                type = 'bson';
+                isReadonly = true; // BSON ObjectId is readonly
+                displayValue = JSON.stringify(value);
+            } else if ('$guid' in value) {
+                type = 'guid';
+                isReadonly = true; // BSON GUID is readonly
+                displayValue = JSON.stringify(value);
+            } else if ('$date' in value) {
+                type = 'date';
+                isReadonly = true; // BSON Date is readonly
+                displayValue = JSON.stringify(value);
+            } else {
+                // Other objects (nested documents, arrays)
+                type = 'object';
+                displayValue = JSON.stringify(value);
+            }
+        } else if (typeof value === 'number') {
+            type = 'number';
+            displayValue = String(value);
+        } else if (typeof value === 'boolean') {
+            type = 'boolean';
+            displayValue = String(value);
+        } else {
+            // Strings and other primitive types
+            displayValue = escapeHtml(value);
+        }
+
+        // Special handling for _id column - always readonly
+        if (col === '_id') {
+            isReadonly = true;
+        }
+
+        // Store the raw _id value in data-id for all cells in this row
+        // This ensures update operations can target the correct document
+        const readonlyAttr = isReadonly ? ' data-readonly="true"' : '';
+
+        return `<td data-row="${index}" data-col="${escapeHtml(col)}" data-id="${escapeHtml(idValue)}" data-type="${type}"${readonlyAttr} tabindex="0">${displayValue}</td>`;
     }).join('');
 
     return `<tr><td class="row-number">${index + 1}</td>${cells}</tr>`;

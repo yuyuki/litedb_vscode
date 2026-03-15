@@ -27,6 +27,13 @@ export function isValidObjectId(value: unknown): value is string {
 }
 
 /**
+ * Checks if a string is a valid GUID
+ */
+export function isValidGuid(value: unknown): value is string {
+    return typeof value === 'string' && /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/i.test(value);
+}
+
+/**
  * Formats an _id value for display as BSON ObjectId
  */
 export function formatIdAsBson(id: unknown): string {
@@ -34,6 +41,19 @@ export function formatIdAsBson(id: unknown): string {
         return JSON.stringify({ $oid: id });
     }
     return String(id ?? '');
+}
+
+/**
+ * Formats a GUID value for display as BSON GUID
+ */
+export function formatGuidAsBson(guid: unknown): string {
+    if (typeof guid === 'object' && guid !== null && '$guid' in guid) {
+        return JSON.stringify(guid);
+    }
+    if (isValidGuid(guid)) {
+        return JSON.stringify({ $guid: guid });
+    }
+    return String(guid ?? '');
 }
 
 /**
