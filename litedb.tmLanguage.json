@@ -12,10 +12,24 @@
       ]
     },
     {
+      "name": "keyword.operator.arithmetic.litedb",
+      "match": "(\\*|\\+|\\-|/|%)"
+    },
+    {
+      "name": "keyword.operator.comparison.litedb",
+      "match": "(<=|>=|<>|!=|=|<|>)"
+    },
+    {
+      "name": "keyword.operator.litedb",
+      "match": "(<<=|>>=|\\+=|\\-=|\\*=|/=|%=|&=|\\|=|\\^=|<<|>>|\\^|!|~|&|\\||\\?|:|\\.|,|;|\\[|\\]|\\(|\\))"
+    },
+    {
       "name": "string.quoted.single.litedb",
       "match": "'[^']*'",
       "captures": {
-        "0": { "name": "string.quoted.single.litedb" }
+        "0": {
+          "name": "string.quoted.single.litedb"
+        }
       }
     },
     {
@@ -27,16 +41,12 @@
       "match": "(?i)\\b(SELECT|FROM|WHERE|ORDER BY|AS|WITH|CASE|WHEN|THEN|ELSE|END|AND|OR|NOT|IN|ON|JOIN|LEFT|RIGHT|INNER|OUTER|GROUP BY|LIMIT|INSERT|DELETE|UPDATE|VALUES|SET|DISTINCT|BY|DESC|ASC)\\b"
     },
     {
-      "name": "variable.other.litedb",
-  "match": "(?i)\\b[a-zA-Z_][a-zA-Z0-9_]*\\b"
-    },
-    {
-      "name": "keyword.operator.litedb",
-      "match": "(=|<|>|<=|>=|<>|!=|\\+|\\-|\\*|\\/)"
-    },
-    {
       "name": "support.function.litedb",
-  "match": "(?i)\\b(CASE|COUNT|SUM|AVG|MIN|MAX|UPPER|LOWER|LENGTH)\\b"
+      "match": "(?i)\\b(COUNT|MIN|MAX|FIRST|LAST|AVG|SUM|ANY|MINVALUE|MAXVALUE|OBJECTID|GUID|NOW|NOW_UTC|TODAY|INT32|INT64|DOUBLE|DECIMAL|STRING|BINARY|BOOLEAN|DATETIME|DATETIME_UTC|IS_MINVALUE|IS_MAXVALUE|IS_NULL|IS_INT32|IS_INT64|IS_DOUBLE|IS_DECIMAL|IS_NUMBER|IS_STRING|IS_DOCUMENT|IS_ARRAY|IS_BINARY|IS_OBJECTID|IS_GUID|IS_BOOLEAN|IS_DATETIME|YEAR|MONTH|DAY|HOUR|MINUTE|SECOND|DATEADD|DATEDIFF|TO_LOCAL|TO_UTC|ABS|ROUND|POW|LOWER|UPPER|LTRIM|RTRIM|TRIM|INDEXOF|SUBSTRING|LPAD|RPAD|SPLIT|FORMAT|JOIN|JSON|EXTEND|CONCAT|KEYS|OID_CREATIONTIME|IIF|COALESCE|LENGTH|TOP|UNION|EXCEPT|DISTINCT|RANDOM)\\b"
+    },
+    {
+      "name": "variable.other.litedb",
+      "match": "(?i)\\b[a-zA-Z_][a-zA-Z0-9_]*\\b"
     }
   ],
   "repository": {

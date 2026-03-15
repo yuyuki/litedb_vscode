@@ -62,7 +62,18 @@ export function renderCollectionGrid(collectionName: string, result: QueryResult
 }
 
 function renderRow(row: Record<string, unknown>, columns: string[], index: number): string {
-    const idValue = row['_id'] !== undefined ? String(row['_id']) : '';
+    // Store _id value for update operations
+    // If _id is already a BSON object {$oid: "..."}, extract the $oid value
+    // Otherwise, store the raw value
+    let idValue = '';
+    if (row['_id'] !== undefined) {
+        const id = row['_id'];
+        if (typeof id === 'object' && id !== null && '$oid' in id) {
+            idValue = (id as any).$oid;
+        } else {
+            idValue = String(id);
+        }
+    }
     
     const cells = columns.map(col => {
         const value = row[col];

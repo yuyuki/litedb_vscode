@@ -49,6 +49,11 @@ export function getLiteDbIdExpression(id: unknown): string {
         // Fall through to default handling
     }
     
+    // If it's a plain ObjectId string (24 hex chars), wrap it in ObjectId()
+    if (isValidObjectId(id)) {
+        return `ObjectId('${id}')`;
+    }
+    
     if (typeof id === 'string') {
         return isNaN(Number(id)) ? `'${escapeSqlString(id)}'` : id;
     }

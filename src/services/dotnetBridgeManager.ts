@@ -116,7 +116,9 @@ export class DotnetBridgeManager {
     }
 
     private handleStderr(chunk: string): void {
-        this.log(`STDERR: ${chunk}`, true);
+        // Parse log level from C# backend messages
+        const isError = chunk.includes('[ERROR]');
+        this.log(`STDERR: ${chunk}`, isError);
     }
 
     private handleResponse(line: string): void {

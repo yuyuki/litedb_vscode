@@ -1,0 +1,151 @@
+-- SYNTAX TEST "source.litedb" "LiteDB Grammar Test"
+
+-- Test SELECT keyword
+SELECT * FROM users
+-- <- keyword.control.litedb
+--     ^ keyword.operator.arithmetic.litedb
+--       ^^^^ keyword.control.litedb
+
+-- Test Numeric
+SELECT 42 FROM data
+--     ^^ constant.numeric.litedb
+
+-- Test String
+SELECT 'hello' FROM data
+--     ^^^^^^^ string.quoted.single.litedb
+
+-- Test Function
+SELECT COUNT(*) FROM items
+--     ^^^^^ support.function.litedb
+
+-- Test WHERE
+SELECT * FROM users WHERE age >= 18
+--                  ^^^^^ keyword.control.litedb
+--                            ^^ keyword.operator.comparison.litedb
+--                               ^^ constant.numeric.litedb
+
+-- Test AND OR NOT
+SELECT * FROM users WHERE active AND verified
+--                               ^^^ keyword.control.litedb
+
+SELECT * FROM users WHERE active OR verified
+--                               ^^ keyword.control.litedb
+
+SELECT * FROM users WHERE NOT active
+--                        ^^^ keyword.control.litedb
+
+-- Test JOIN
+SELECT * FROM users u JOIN orders o ON u.id = o.user_id
+--                    ^^^^ keyword.control.litedb
+--                                  ^^ keyword.control.litedb
+
+-- Test ORDER BY LIMIT
+SELECT name FROM users ORDER BY age DESC LIMIT 10
+--                     ^^^^^ keyword.control.litedb
+--                           ^^ keyword.control.litedb
+--                                  ^^^^ keyword.control.litedb
+--                                       ^^^^^ keyword.control.litedb
+--                                             ^^ constant.numeric.litedb
+
+-- Test INSERT UPDATE DELETE
+INSERT INTO users VALUES ('test')
+--^^^^ keyword.control.litedb
+
+UPDATE users SET name = 'value'
+--^^^^ keyword.control.litedb
+--           ^^^ keyword.control.litedb
+
+DELETE FROM logs WHERE old
+--^^^^ keyword.control.litedb
+--     ^^^^ keyword.control.litedb
+--               ^^^^^ keyword.control.litedb
+
+-- Test AS DISTINCT
+SELECT COUNT(*) AS total FROM items
+--              ^^ keyword.control.litedb
+
+SELECT DISTINCT category FROM products
+--     ^^^^^^^^ keyword.control.litedb
+
+-- Test CASE WHEN THEN ELSE END
+SELECT CASE WHEN active THEN 'yes' ELSE 'no' END FROM data
+--     ^^^^ keyword.control.litedb
+--          ^^^^ keyword.control.litedb
+--                      ^^^^ keyword.control.litedb
+--                                 ^^^^ keyword.control.litedb
+--                                           ^^^ keyword.control.litedb
+
+-- Test more functions
+SELECT MIN(value) FROM data
+--     ^^^ support.function.litedb
+
+SELECT MAX(value) FROM data
+--     ^^^ support.function.litedb
+
+SELECT AVG(value) FROM data
+--     ^^^ support.function.litedb
+
+SELECT SUM(value) FROM data
+--     ^^^ support.function.litedb
+
+SELECT UPPER(name) FROM data
+--     ^^^^^ support.function.litedb
+
+SELECT LOWER(name) FROM data
+--     ^^^^^ support.function.litedb
+
+SELECT TRIM(text) FROM data
+--     ^^^^ support.function.litedb
+
+SELECT NOW() FROM data
+--     ^^^ support.function.litedb
+
+SELECT GUID() FROM data
+--     ^^^^ support.function.litedb
+
+SELECT OBJECTID() FROM data
+--     ^^^^^^^^ support.function.litedb
+
+-- Test comparison operators
+SELECT * FROM data WHERE a = b
+--                         ^ keyword.operator.comparison.litedb
+
+SELECT * FROM data WHERE a != b
+--                         ^^ keyword.operator.comparison.litedb
+
+SELECT * FROM data WHERE a <> b
+--                         ^^ keyword.operator.comparison.litedb
+
+SELECT * FROM data WHERE a < b
+--                         ^ keyword.operator.comparison.litedb
+
+SELECT * FROM data WHERE a > b
+--                         ^ keyword.operator.comparison.litedb
+
+SELECT * FROM data WHERE a <= b
+--                         ^^ keyword.operator.comparison.litedb
+
+SELECT * FROM data WHERE a >= b
+--                         ^^ keyword.operator.comparison.litedb
+
+-- Test arithmetic operators
+SELECT a + b FROM data
+--       ^ keyword.operator.arithmetic.litedb
+
+SELECT a - b FROM data
+--       ^ keyword.operator.arithmetic.litedb
+
+SELECT a * b FROM data
+--       ^ keyword.operator.arithmetic.litedb
+
+SELECT a / b FROM data
+--       ^ keyword.operator.arithmetic.litedb
+
+SELECT a % b FROM data
+--       ^ keyword.operator.arithmetic.litedb
+
+-- Test variables
+SELECT userId, userName, _privateField FROM accounts
+--     ^^^^^^ variable.other.litedb
+--             ^^^^^^^^ variable.other.litedb
+--                       ^^^^^^^^^^^^^ variable.other.litedb

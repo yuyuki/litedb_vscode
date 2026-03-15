@@ -25,9 +25,8 @@ public static class Program
     public static int Main(string[] args)
     {
         AppDomain.CurrentDomain.ProcessExit += (_, __) => CloseAllDatabases();
-        
-        string? line;
-        while ((line = Console.ReadLine()) != null)
+
+        while (Console.ReadLine() is { } line)
         {
             ProcessRequest(line);
         }
@@ -38,6 +37,8 @@ public static class Program
 
     private static void ProcessRequest(string line)
     {
+
+        LogInfo($"Received line: {line}");
         try
         {
             if (string.IsNullOrWhiteSpace(line))
@@ -177,10 +178,15 @@ public static class Program
 
         var db = GetDatabase(request.DbPath);
         
+        LogInfo($"Executing query: {request.Query}");
+        
         try
         {
             var result = db.Execute(request.Query).ToList();
+            LogInfo($"Query returned {result.Count} result(s)");
+            
             var rows = result.SelectMany(ExpandToRows).ToList();
+            LogInfo($"Expanded to {rows.Count} row(s)");
 
             var columns = rows
                 .SelectMany(r => r.Keys)
@@ -228,7 +234,13 @@ public static class Program
         var row = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         foreach (var key in doc.Keys)
         {
-            row[key] = FormatValue(doc[key]);
+            var bsonValue = doc[key];
+            // Log the type for debugging
+            if (key.Equals("price", StringComparison.OrdinalIgnoreCase))
+            {
+                LogInfo($"Field 'price' type: {bsonValue.Type}, IsString: {bsonValue.IsString}, IsNumber: {bsonValue.IsInt32 || bsonValue.IsInt64 || bsonValue.IsDouble || bsonValue.IsDecimal}");
+            }
+            row[key] = FormatValue(bsonValue);
         }
 
         return new[] { (IDictionary<string, string>)row };
@@ -246,7 +258,15 @@ public static class Program
             return JsonSerializer.Serialize(ConvertToNative(value));
         }
 
-        return BsonMapper.Global.Serialize(value).RawValue?.ToString() ?? string.Empty;
+        // Format strings with quotes to distinguish them from numbers
+        if (value.IsString)
+        {
+            return $"\"{value.AsString}\"";
+        }
+
+        // For other types (numbers, booleans, etc.), return as-is
+        var rawValue = BsonMapper.Global.Serialize(value).RawValue;
+        return rawValue?.ToString() ?? string.Empty;
     }
 
     private static object? ConvertToNative(BsonValue value)
@@ -285,6 +305,7 @@ public static class Program
 
     private static void LogInfo(string message)
     {
+        // Write INFO logs to STDERR for debugging (they won't interfere with JSON responses on STDOUT)
         Console.Error.WriteLine($"[INFO] {DateTime.Now:yyyy-MM-dd HH:mm:ss} - {message}");
     }
 
