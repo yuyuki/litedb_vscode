@@ -204,8 +204,19 @@ export class DotnetBridgeManager {
         }
     }
 
-    public dispose(): void {
+    public async dispose(): Promise<void> {
         this.disposed = true;
+        
+        // Send close command to gracefully close all databases
+        try {
+            if (this.process && !this.process.killed) {
+                await this.send({ command: 'close', dbPath: '', query: null });
+                // Give it more time to process the close command and delete log files
+                await new Promise(resolve => setTimeout(resolve, 500));
+            }
+        } catch (error) {
+            this.log(`Error during graceful shutdown: ${error}`, true);
+        }
         
         // Reject all pending requests
         for (const item of this.queue) {

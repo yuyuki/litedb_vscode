@@ -2,20 +2,13 @@
   "name": "litedb-vscode",
   "displayName": "LiteDB Explorer",
   "description": "Open LiteDB files, browse collections, and run queries from VS Code.",
-  "version": "0.0.1",
+  "version": "0.5.0",
   "publisher": "local",
   "engines": {
     "vscode": "^1.85.0"
   },
   "categories": [
     "Other"
-  ],
-  "activationEvents": [
-    "onCommand:litedb.openDatabase",
-    "onCommand:litedb.closeDatabase",
-    "onCommand:litedb.runQuery",
-    "onCommand:litedb.openCollection",
-    "onView:litedbExplorer"
   ],
   "main": "./out/extension.js",
   "contributes": {

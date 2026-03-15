@@ -154,34 +154,32 @@ async function openDatabase(
 }
 
 import * as fs from 'fs';
-function closeDatabase(
+async function closeDatabase(
     state: LiteDbState,
     collectionsProvider: LiteDbCollectionsProvider,
     completionProvider: LiteDbCompletionProvider
-): void {
+): Promise<void> {
     if (!state.isOpen()) {
         vscode.window.showInformationMessage('No LiteDB database is currently open.');
         return;
     }
 
     const dbPath = state.dbPath;
+    
+    // Send close command to backend to properly close database and delete log file
+    if (dbPath && bridgeManager) {
+        try {
+            await bridgeManager.send({ command: 'close', dbPath, query: null });
+        } catch (error) {
+            console.error('Error closing database in backend:', error);
+        }
+    }
+    
     state.close();
 
     // Invalidate cache for closed database
     if (dbPath) {
         liteDbService!.invalidateCache(dbPath);
-
-        // Attempt to delete the log file (e.g., mydb-log.litedb or mydb-log.<ext>)
-        try {
-            const ext = dbPath.includes('.') ? dbPath.substring(dbPath.lastIndexOf('.')) : '';
-            const logFile = dbPath.replace(/(\.[^\\/.]+)?$/, `-log${ext}`);
-            if (fs.existsSync(logFile)) {
-                fs.unlinkSync(logFile);
-            }
-        } catch (err) {
-            // Optionally log error, but do not block close
-            console.error('Failed to delete LiteDB log file:', err);
-        }
     }
 
     collectionsProvider.refresh();
@@ -391,14 +389,14 @@ function isDataModifyingQuery(script: string): boolean {
     return /\b(INSERT|UPDATE|DELETE|DROP|CREATE)\b/i.test(script);
 }
 
-export function deactivate(): void {
+export async function deactivate(): Promise<void> {
     if (liteDbService) {
         liteDbService.dispose();
         liteDbService = undefined;
     }
 
     if (bridgeManager) {
-        bridgeManager.dispose();
+        await bridgeManager.dispose();
         bridgeManager = undefined;
     }
 }

@@ -82,6 +82,10 @@ public static class Program
                 case "query":
                     ExecuteQuery(request);
                     break;
+                case "close":
+                    CloseAllDatabases();
+                    WriteResponse(new BridgeResponse(true, Data: "Databases closed"));
+                    break;
                 default:
                     WriteResponse(new BridgeResponse(false, Error: $"Unknown command: {request.Command}"));
                     break;
@@ -111,19 +115,74 @@ public static class Program
 
     private static void CloseAllDatabases()
     {
+        LogInfo("CloseAllDatabases");
+
         foreach (var (path, db) in _dbCache)
         {
-            try
-            {
-                db.Dispose();
-                LogInfo($"Closed database: {path}");
-            }
-            catch (Exception ex)
-            {
-                LogError($"Error closing database {path}: {ex.Message}");
-            }
+            CloseDatabase(path, db);
         }
         _dbCache.Clear();
+    }
+
+    private static void CloseDatabase(string path, LiteDatabase db)
+    {
+        try
+        {
+            // Perform checkpoint to flush all changes to disk
+            try
+            {
+                db.Checkpoint();
+                LogInfo($"Checkpoint completed for database: {path}");
+            }
+            catch (Exception checkpointEx)
+            {
+                LogError($"Error during checkpoint for {path}: {checkpointEx.Message}");
+            }
+
+            // Dispose the database
+            db.Dispose();
+            LogInfo($"Closed database: {path}");
+
+            // Wait a moment to ensure file handles are released
+            Thread.Sleep(100);
+
+            // Delete corresponding -log.litedb file if it exists
+            try
+            {
+                var dbDir = Path.GetDirectoryName(path);
+                var dbFile = Path.GetFileNameWithoutExtension(path);
+                var logFile = Path.Combine(dbDir ?? string.Empty, $"{dbFile}-log.litedb");
+                
+                if (File.Exists(logFile))
+                {
+                    // Retry deletion a few times in case of file locks
+                    int retries = 3;
+                    while (retries > 0)
+                    {
+                        try
+                        {
+                            File.Delete(logFile);
+                            LogInfo($"Deleted log file: {logFile}");
+                            break;
+                        }
+                        catch (IOException) when (retries > 1)
+                        {
+                            LogInfo($"Retrying log file deletion for {logFile}, attempts remaining: {retries - 1}");
+                            Thread.Sleep(100);
+                            retries--;
+                        }
+                    }
+                }
+            }
+            catch (Exception logEx)
+            {
+                LogError($"Error deleting log file for {path}: {logEx.Message}");
+            }
+        }
+        catch (Exception ex)
+        {
+            LogError($"Error closing database {path}: {ex.Message}");
+        }
     }
 
     private static void GetCollections(BridgeRequest request)
