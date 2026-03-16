@@ -11,7 +11,7 @@ export class DotnetBridgeManager {
     private process: ChildProcessWithoutNullStreams | null = null;
     private busy = false;
     private queue: BridgeQueueItem[] = [];
-    private readonly projectPath: string;
+    private readonly dllPath: string;
     private restarting = false;
     private buffer = '';
     private currentResolve?: (value: any) => void;
@@ -23,8 +23,8 @@ export class DotnetBridgeManager {
         if (!DotnetBridgeManager.outputChannel) {
             DotnetBridgeManager.outputChannel = vscode.window.createOutputChannel('LiteDB Bridge');
         }
-        this.projectPath = path.join(extensionPath, 'backend', 'LiteDbBridge', 'LiteDbBridge.csproj');
-        this.launch();
+    this.dllPath = path.join(extensionPath, 'out', 'LiteDbBridge', 'LiteDbBridge.dll');
+    this.launch();
     }
 
     private launch(): void {
@@ -33,11 +33,11 @@ export class DotnetBridgeManager {
         }
 
         this.cleanup();
-        
+
         try {
             this.process = spawn(
-                'dotnet', 
-                ['run', '--project', this.projectPath, '--', '--persistent'], 
+                'dotnet',
+                [this.dllPath, '--persistent'],
                 {
                     cwd: this.extensionPath,
                     stdio: ['pipe', 'pipe', 'pipe']
@@ -46,10 +46,10 @@ export class DotnetBridgeManager {
 
             this.process.on('exit', (code) => this.handleExit(code));
             this.process.on('error', (err) => this.handleError(err));
-            
+
             this.process.stdout.setEncoding('utf8');
             this.process.stderr.setEncoding('utf8');
-            
+
             this.process.stdout.on('data', (chunk: string) => this.handleStdout(chunk));
             this.process.stderr.on('data', (chunk: string) => this.handleStderr(chunk));
         } catch (error) {

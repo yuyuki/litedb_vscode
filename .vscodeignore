@@ -1,5 +1,20 @@
-*.vsix
-.vscode/
-.git/
-node_modules/
-*.log
+
+# Ignore everything by default
+*
+# Exclude backend source, project files, and all obj/bin except Release/net10.0
+backend/**/**
+src/**/**
+.vscode/**/**
+unitTest/**/**
+
+# But include these:
+!out/**
+!backend/LiteDbBridge/bin/Release/net10.0/**
+!media/**
+!README.md
+!package.json
+!language-configuration.json
+!litedb.tmLanguage.json
+!LICENSE.md
+!extension.vsixmanifest
+![Content_Types].xml

@@ -24,6 +24,13 @@
 			"command": "dotnet build",
 			"group": "build",
 			"problemMatcher": []
+		},
+		{
+			"label": "dotnet: build Release",
+			"type": "shell",
+			"command": "dotnet build -c Release",
+			"group": "build",
+			"problemMatcher": []
 		}
 	]
 }

@@ -4,4 +4,4 @@ backend/LiteDbBridge/bin/
 backend/LiteDbBridge/obj/
 .vscode-test/
 package-lock.json
-litedb-vscode-0.0.1.vsix
+*.vsix
