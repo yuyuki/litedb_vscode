@@ -12,6 +12,10 @@
 - Keep the extension version and changelog aligned for the next published
   release.
 
+### Documentation
+
+- Require changelog updates for every change and README updates when useful.
+
 ## 1.0.1 — 2026-09-27
 
 ### Added

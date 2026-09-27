@@ -48,6 +48,7 @@ export const LITEDB_FUNCTIONS = [
 ] as const;
 
 export const COMMAND_IDS = {
+    CREATE_DATABASE: 'litedb.createDatabase',
     OPEN_DATABASE: 'litedb.openDatabase',
     CLOSE_DATABASE: 'litedb.closeDatabase',
     RUN_QUERY: 'litedb.runQuery',

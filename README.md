@@ -6,6 +6,10 @@ install the .NET runtime on the machine running the extension.
 
 ## Use
 
+Use **LiteDB: Create Database** from the Command Palette or the new file icon
+to the left of **Open Database** in the LiteDB Explorer view. Choose a path in
+the Save dialog to create an empty `.litedb` or `.db` file and open it.
+
 1. Run **LiteDB: Open Database** from the Command Palette or the LiteDB view
    in Explorer, then select a `.db` or `.litedb` file.
 2. Select a collection to view its documents. Use the refresh button to reload.

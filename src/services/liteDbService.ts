@@ -13,6 +13,13 @@ export class LiteDbService {
         this.fieldsCache = new CacheManager<string[]>();
     }
 
+    async createDatabase(dbPath: string): Promise<BridgeResponse<string[]>> {
+        return this.bridgeManager.send<string[]>({
+            command: BridgeCommand.Create,
+            dbPath
+        });
+    }
+
     async getCollections(dbPath: string, useCache = true): Promise<BridgeResponse<string[]>> {
         if (useCache && this.collectionsCache.has(dbPath)) {
             return {

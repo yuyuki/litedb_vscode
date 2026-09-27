@@ -23,6 +23,7 @@ export interface CollectionInfo {
 }
 
 export enum BridgeCommand {
+    Create = 'create',
     Collections = 'collections',
     Fields = 'fields',
     Query = 'query'

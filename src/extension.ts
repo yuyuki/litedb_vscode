@@ -58,10 +58,16 @@ function registerCommands(
     resultViewProvider: LiteDbResultViewProvider,
     completionProvider: LiteDbCompletionProvider
 ): void {
+    context.subscriptions.push(
+        vscode.commands.registerCommand(COMMAND_IDS.CREATE_DATABASE, async () => {
+            await createDatabase(state, collectionsProvider, completionProvider);
+        })
+    );
+
     // Open Database Command
     context.subscriptions.push(
         vscode.commands.registerCommand(COMMAND_IDS.OPEN_DATABASE, async () => {
-            await openDatabase(context, state, collectionsProvider, completionProvider);
+            await openDatabase(state, collectionsProvider, completionProvider);
         })
     );
 
@@ -108,8 +114,45 @@ function registerCommands(
     );
 }
 
+async function createDatabase(
+    state: LiteDbState,
+    collectionsProvider: LiteDbCollectionsProvider,
+    completionProvider: LiteDbCompletionProvider
+): Promise<void> {
+    const target = await vscode.window.showSaveDialog({
+        defaultUri: vscode.workspace.workspaceFolders?.[0]
+            ? vscode.Uri.joinPath(vscode.workspace.workspaceFolders[0].uri, 'database.litedb')
+            : undefined,
+        saveLabel: 'Create LiteDB',
+        filters: { 'LiteDB files': ['litedb', 'db'] }
+    });
+
+    if (!target) {
+        return;
+    }
+
+    const dbPath = target.fsPath;
+    await vscode.window.withProgress({
+        location: vscode.ProgressLocation.Notification,
+        title: 'Creating LiteDB database...',
+        cancellable: false
+    }, async () => {
+        try {
+            const result = await liteDbService!.createDatabase(dbPath);
+            if (!result.success) {
+                vscode.window.showErrorMessage(`Failed to create LiteDB: ${result.error ?? 'Unknown error'}`);
+                return;
+            }
+
+            await showDatabase(dbPath, state, collectionsProvider, completionProvider);
+            vscode.window.showInformationMessage(`Created LiteDB: ${path.basename(dbPath)}`);
+        } catch (error) {
+            vscode.window.showErrorMessage(`Failed to create LiteDB: ${error instanceof Error ? error.message : String(error)}`);
+        }
+    });
+}
+
 async function openDatabase(
-    context: vscode.ExtensionContext,
     state: LiteDbState,
     collectionsProvider: LiteDbCollectionsProvider,
     completionProvider: LiteDbCompletionProvider
@@ -145,15 +188,23 @@ async function openDatabase(
         }
 
         progress.report({ message: 'Loading collections...' });
-        state.open(dbPath);
-        collectionsProvider.refresh();
-        await completionProvider.initialize();
+        await showDatabase(dbPath, state, collectionsProvider, completionProvider);
         
         vscode.window.showInformationMessage(`Opened LiteDB: ${path.basename(dbPath)}`);
     });
 }
 
-import * as fs from 'fs';
+async function showDatabase(
+    dbPath: string,
+    state: LiteDbState,
+    collectionsProvider: LiteDbCollectionsProvider,
+    completionProvider: LiteDbCompletionProvider
+): Promise<void> {
+    state.open(dbPath);
+    collectionsProvider.refresh();
+    await completionProvider.refresh();
+}
+
 async function closeDatabase(
     state: LiteDbState,
     collectionsProvider: LiteDbCollectionsProvider,

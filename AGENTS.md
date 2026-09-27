@@ -15,6 +15,12 @@ VS Code webview. See `src/extension.ts` for command wiring.
   and reopening in an Extension Development Host when VS Code is available.
 - Report any verification blocked by a missing SDK or runtime.
 
+## Documentation for every change
+
+- Update `CHANGELOG.md` for every change.
+- Update `README.md` when the change affects users or its documentation would
+  help them use or develop the extension. Keep examples runnable.
+
 ## Invariants
 
 - The bridge uses one JSON request and one JSON response per line on stdout;
@@ -25,4 +31,3 @@ VS Code webview. See `src/extension.ts` for command wiring.
 - Treat database content and webview messages as untrusted. Escape HTML and
   attributes; validate edits before building LiteDB SQL. Preserve BSON ID
   types and never silently convert an ID string to an ObjectId or number.
-- Update the README for user facing behavior changes. Keep examples runnable.

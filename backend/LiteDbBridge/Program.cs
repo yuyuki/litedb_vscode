@@ -74,6 +74,9 @@ public static class Program
         {
             switch (request.Command.ToLowerInvariant())
             {
+                case "create":
+                    CreateDatabase(request);
+                    break;
                 case "collections":
                     GetCollections(request);
                     break;
@@ -100,6 +103,25 @@ public static class Program
             WriteResponse(new BridgeResponse(false, Error: ex.Message));
             LogError($"Command execution error: {ex}");
         }
+    }
+
+    private static void CreateDatabase(BridgeRequest request)
+    {
+        if (string.IsNullOrWhiteSpace(request.DbPath))
+        {
+            WriteResponse(new BridgeResponse(false, Error: "Database path is required"));
+            return;
+        }
+
+        if (File.Exists(request.DbPath))
+        {
+            WriteResponse(new BridgeResponse(false, Error: "A file already exists at this path"));
+            return;
+        }
+
+        var db = GetDatabase(request.DbPath);
+        var names = db.GetCollectionNames().ToArray();
+        WriteResponse(new BridgeResponse(true, Data: names));
     }
 
     private static LiteDatabase GetDatabase(string dbPath)

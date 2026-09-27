@@ -35,6 +35,11 @@
     ],
     "commands": [
       {
+        "command": "litedb.createDatabase",
+        "title": "Create Database",
+        "icon": "$(new-file)"
+      },
+      {
         "command": "litedb.openDatabase",
         "title": "Open Database",
         "icon": "$(folder-opened)"
@@ -98,6 +103,11 @@
     ],
     "menus": {
       "view/title": [
+        {
+          "command": "litedb.createDatabase",
+          "when": "view == litedbExplorer",
+          "group": "navigation@0"
+        },
         {
           "command": "litedb.openDatabase",
           "when": "view == litedbExplorer",
