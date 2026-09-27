@@ -41,6 +41,44 @@ Development Host. TypeScript source is in `src/`, the bridge is in
 `backend/LiteDbBridge/`, and the collection webview is in `media/gridView.html`.
 See [AGENTS.md](AGENTS.md) for development invariants.
 
+## Test locally
+
+1. Install the prerequisites for the project: Node.js, npm, and the .NET 10 SDK.
+2. From the repository root, install dependencies and build both parts of the
+   extension:
+
+   ```sh
+   npm install
+   npm run compile
+   dotnet build backend/LiteDbBridge/LiteDbBridge.csproj
+   ```
+
+3. In VS Code, press F5 or run **Run and Debug** → **Run Extension**. This opens
+   a new Extension Development Host window with the extension enabled.
+4. In the new VS Code window, open the Command Palette and run **LiteDB: Open
+   Database**. Pick a `.db` or `.litedb` file to validate that the bridge,
+   Explorer view, and collection browser load correctly.
+5. Exercise the main flows to confirm behavior:
+   - open a database
+   - browse a collection
+   - edit a primitive value and save it
+   - run a LiteDB SQL query
+   - refresh collections and close the database
+6. For automated validation, run:
+
+   ```sh
+   npm test
+   ```
+
+7. If you want to validate the packaged extension itself, create a VSIX with:
+
+   ```sh
+   npx vsce package
+   ```
+
+   Then install the generated `.vsix` file in VS Code to test the packaged build
+   just like a published extension.
+
 ## Publish to the Marketplace
 
 Add an Azure DevOps Personal Access Token with **Marketplace (Manage)** scope
