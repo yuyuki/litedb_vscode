@@ -1,0 +1,61 @@
+name: Publish VS Code extension
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: marketplace-publish
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Validate release tag
+        run: |
+          node -e "const version = require('./package.json').version; if (process.env.GITHUB_REF_NAME !== 'v' + version) { console.error('Tag must be v' + version); process.exit(1); }"
+          git fetch origin main
+          git merge-base --is-ancestor "$GITHUB_SHA" origin/main
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Build and test extension
+        run: |
+          npm install
+          npm test
+          dotnet publish backend/LiteDbBridge/LiteDbBridge.csproj -c Release -o out/LiteDbBridge
+
+      - name: Verify package contents
+        run: |
+          npx vsce ls --no-dependencies > packaged-files.txt
+          for file in \
+            out/extension.js \
+            out/LiteDbBridge/LiteDbBridge.dll \
+            out/LiteDbBridge/LiteDbBridge.deps.json \
+            out/LiteDbBridge/LiteDbBridge.runtimeconfig.json \
+            out/LiteDbBridge/LiteDB.dll \
+            HELP.md CHANGELOG.md; do
+            grep -Fxq "$file" packaged-files.txt || { echo "Missing from VSIX: $file"; exit 1; }
+          done
+
+      - name: Publish to Visual Studio Marketplace
+        env:
+          VSCE_PAT: ${{ secrets.VSCE_PAT }}
+        run: |
+          test -n "$VSCE_PAT" || { echo 'Add the VSCE_PAT repository secret to publish.'; exit 1; }
+          npx vsce publish --no-dependencies

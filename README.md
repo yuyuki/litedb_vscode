@@ -41,6 +41,25 @@ Development Host. TypeScript source is in `src/`, the bridge is in
 `backend/LiteDbBridge/`, and the collection webview is in `media/gridView.html`.
 See [AGENTS.md](AGENTS.md) for development invariants.
 
+## Publish to the Marketplace
+
+Add an Azure DevOps Personal Access Token with **Marketplace (Manage)** scope
+as the GitHub repository secret `VSCE_PAT` (Settings → Secrets and variables →
+Actions). The token must belong to an account authorized to publish under
+`JaufrDevosse`. Do not add the token to the repository.
+
+After merging a release with an updated `package.json` version and changelog,
+create and push a matching tag on `main` (for example, `v1.0.1` for version
+`1.0.1`). The [publish workflow](.github/workflows/publish-marketplace.yml)
+builds the TypeScript and .NET bridge, runs tests, verifies VSIX contents, and
+publishes the new version. A tag whose version differs from `package.json`, or
+whose commit is not on `main`, fails before publishing. Check the workflow run
+in GitHub Actions. Marketplace publishing requires a version not already
+published.
+
+Azure DevOps global PATs stop working on December 1, 2026. Plan to migrate
+publishing to Microsoft Entra authentication before then.
+
 ## License
 
 MIT. See [LICENSE.md](LICENSE.md).

@@ -12,6 +12,8 @@ unitTest/**/**
 !backend/LiteDbBridge/bin/Release/net10.0/**
 !media/**
 !README.md
+!HELP.md
+!CHANGELOG.md
 !package.json
 !language-configuration.json
 !litedb.tmLanguage.json
