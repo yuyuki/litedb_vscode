@@ -7,6 +7,25 @@ import { escapeHtml } from './stringUtils';
 
 // Cache the HTML template
 let htmlTemplate: string | null = null;
+const JSON_PREVIEW_LENGTH = 60;
+
+function isJsonText(value: string): boolean {
+    const trimmed = value.trim();
+    if (!trimmed.startsWith('{') && !trimmed.startsWith('[')) return false;
+    try {
+        const parsed = JSON.parse(trimmed);
+        return parsed !== null && typeof parsed === 'object';
+    } catch {
+        return false;
+    }
+}
+
+function renderJsonPreview(value: string): string {
+    const preview = value.length > JSON_PREVIEW_LENGTH
+        ? `${value.slice(0, JSON_PREVIEW_LENGTH)}…`
+        : value;
+    return `<button class="json-link" type="button" title="Open formatted JSON">${escapeHtml(preview)}</button>`;
+}
 
 function getHtmlTemplate(): string {
     if (!htmlTemplate) {
@@ -98,7 +117,7 @@ function renderRow(row: Record<string, unknown>, columns: string[], index: numbe
                 type = 'object';
                 isReadonly = true;
                 jsonValue = JSON.stringify(value);
-                displayValue = `<button class="json-link" type="button" title="Open formatted JSON">${escapeHtml(jsonValue.length > 80 ? jsonValue.slice(0, 80) + '…' : jsonValue)}</button>`;
+                displayValue = renderJsonPreview(jsonValue);
             }
         } else if (typeof value === 'number') {
             type = 'number';
@@ -111,8 +130,14 @@ function renderRow(row: Record<string, unknown>, columns: string[], index: numbe
             isReadonly = true;
             displayValue = '';
         } else {
-            // Strings and other primitive types
-            displayValue = escapeHtml(value);
+            if (typeof value === 'string' && isJsonText(value)) {
+                type = 'json';
+                isReadonly = true;
+                jsonValue = value;
+                displayValue = renderJsonPreview(value);
+            } else {
+                displayValue = escapeHtml(value);
+            }
         }
 
         // Special handling for _id column - always readonly

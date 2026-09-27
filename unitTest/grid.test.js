@@ -22,3 +22,14 @@ test('document IDs retain their BSON or primitive type', () => {
     assert.equal(getLiteDbIdExpression('123'), '123');
     assert.throws(() => getLiteDbIdExpression('{"$oid":"invalid"}'));
 });
+
+test('JSON text uses a short preview while ordinary text remains editable', () => {
+    const json = JSON.stringify({ message: 'x'.repeat(200) });
+    const html = renderCollectionGrid('test', {
+        columns: ['payload', 'plain'], rows: [{ payload: json, plain: 'hello' }]
+    });
+    assert.match(html, /data-type="json" data-readonly="true" data-json=/);
+    assert.match(html, /class="json-link"/);
+    assert.match(html, /data-col="plain"[^>]*>hello<\/td>/);
+    assert.doesNotMatch(html, /<button[^>]*>\{&quot;message&quot;:.*x{200}/);
+});
