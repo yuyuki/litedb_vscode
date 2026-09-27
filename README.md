@@ -11,7 +11,8 @@ install the .NET runtime on the machine running the extension.
 2. Select a collection to view its documents. Use the refresh button to reload.
 3. Click a string, number, or boolean cell to edit it; press Enter to save or
    Escape to cancel. `_id`, BSON values, nulls, and nested values are read only.
-   Click nested JSON to open it formatted in an editor.
+   Click nested JSON or a JSON object/array stored as text to open it formatted
+   in an editor. Wide cells are capped and show an ellipsis.
 4. Run **LiteDB: Run Query** to create a query editor. Press F5 to execute its
    selected text, or the whole document when nothing is selected. Results
    appear in the LiteDB Result panel.

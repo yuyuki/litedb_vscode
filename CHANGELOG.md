@@ -4,7 +4,8 @@
 
 ### Added
 
-- Open nested JSON values from collection and query grids in a formatted editor.
+- Open nested JSON values and JSON object/array text from collection and query
+  grids in a formatted editor; cap column width to keep wide values readable.
 - Add agent development guidance and regression tests for JSON display and document IDs.
 
 ### Fixed
