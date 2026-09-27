@@ -10,6 +10,8 @@ Use **LiteDB: Create Database** from the Command Palette or the new file icon
 to the left of **Open Database** in the LiteDB Explorer view. Choose a path in
 the Save dialog to create an empty `.litedb` or `.db` file and open it.
 
+![Create a new database](<images/create new db.gif>)
+
 1. Run **LiteDB: Open Database** from the Command Palette or the LiteDB view
    in Explorer, then select a `.db` or `.litedb` file.
    The view header shows the file name with its original case, for example,
@@ -31,6 +33,7 @@ the Save dialog to create an empty `.litedb` or `.db` file and open it.
 The query editor offers keyword and collection completion. Reload external
 database changes with **LiteDB: Refresh Collections**.
 
+![Resize a column](<images/resize column.gif>)
 ![Open database](images/open_db.gif)
 ![Browse and edit](images/open_and_edit_collection.gif)
 ![Query editor](images/query_editor.gif)

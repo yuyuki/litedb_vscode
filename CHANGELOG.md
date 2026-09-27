@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Documentation
+
+- Add animations showing how to create a database and resize grid columns.
+
 ### Added
 
 - Size collection and query grid columns to their displayed content by default.
