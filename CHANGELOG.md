@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- Size collection and query grid columns to their displayed content by default.
+- Drag a column header's right edge to resize it, or click a header to fit all
+  columns to their headers or each column to its content.
+
+### Fixed
+
+- Safely embed collection names containing quotes in grid webview messages.
+
 ## 1.1.0 — 2026-09-27
 
 ### Added

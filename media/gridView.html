@@ -52,8 +52,8 @@
         }
 
         table {
-            width: 100%;
             border-collapse: collapse;
+            table-layout: fixed;
         }
 
         th,
@@ -63,7 +63,6 @@
             padding: 4px 8px;
             text-align: left;
             white-space: nowrap;
-            max-width: 320px;
             overflow: hidden;
             text-overflow: ellipsis;
         }
@@ -76,8 +75,61 @@
             background: var(--vscode-editorGroupHeader-tabsBackground);
         }
 
+        th:not(.row-number) {
+            cursor: pointer;
+            user-select: none;
+        }
+
+        th:not(.row-number):focus-visible {
+            outline: 1px solid var(--vscode-focusBorder);
+            outline-offset: -2px;
+        }
+
+        .column-resize {
+            position: absolute;
+            top: 0;
+            right: 0;
+            bottom: 0;
+            width: 7px;
+            cursor: col-resize;
+            touch-action: none;
+            z-index: 2;
+        }
+
+        .column-resize:hover,
+        .column-resize:active {
+            background: var(--vscode-focusBorder);
+        }
+
+        .column-menu {
+            position: fixed;
+            z-index: 10;
+            min-width: 220px;
+            padding: 4px;
+            border: 1px solid var(--vscode-menu-border, var(--vscode-panel-border));
+            background: var(--vscode-menu-background, var(--vscode-editor-background));
+            box-shadow: 0 2px 8px var(--vscode-widget-shadow);
+        }
+
+        .column-menu button {
+            display: block;
+            width: 100%;
+            padding: 6px 8px;
+            border: 0;
+            background: transparent;
+            color: var(--vscode-menu-foreground, var(--vscode-editor-foreground));
+            font: inherit;
+            text-align: left;
+            cursor: pointer;
+        }
+
+        .column-menu button:hover,
+        .column-menu button:focus-visible {
+            background: var(--vscode-menu-selectionBackground);
+            color: var(--vscode-menu-selectionForeground);
+        }
+
         .row-number {
-            width: 38px;
             text-align: center;
             color: var(--vscode-descriptionForeground);
             background: var(--vscode-sideBar-background);
@@ -122,8 +174,147 @@
     </div>
     <script>
         const vscode = acquireVsCodeApi();
+        const table = document.querySelector('.grid table');
+        const headers = Array.from(table.querySelectorAll('thead th'));
+        const minColumnWidth = 48;
+        const maxAutomaticWidth = 320;
+        const rowNumberWidth = 54;
+        const columnGroup = document.createElement('colgroup');
+        const columns = headers.map(() => {
+            const col = document.createElement('col');
+            columnGroup.appendChild(col);
+            return col;
+        });
+        table.insertBefore(columnGroup, table.firstChild);
+
+        const savedState = vscode.getState() || {};
+        const gridKey = document.querySelector('.collection-name strong').textContent;
+        let widths = savedState.gridKey === gridKey &&
+            Array.isArray(savedState.widths) && savedState.widths.length === headers.length
+            ? savedState.widths.map(value => Number.isFinite(value) && value >= minColumnWidth ? value : null)
+            : [];
+        const context = document.createElement('canvas').getContext('2d');
+        const measure = element => {
+            if (!context) return element.textContent.length * 8 + 20;
+            const style = getComputedStyle(element);
+            context.font = style.font;
+            return Math.ceil(context.measureText(element.textContent || '').width) + 20;
+        };
+        const fitWidths = mode => headers.map((header, index) => {
+            if (index === 0) return rowNumberWidth;
+            let width = measure(header);
+            if (mode === 'content') {
+                for (const row of table.tBodies[0].rows) {
+                    const cell = row.cells[index];
+                    if (cell && cell.hasAttribute('data-col')) width = Math.max(width, measure(cell));
+                }
+            }
+            return Math.max(minColumnWidth, Math.min(maxAutomaticWidth, width));
+        });
+        const applyWidths = () => {
+            const total = widths.reduce((sum, width) => sum + width, 0);
+            columns.forEach((col, index) => { col.style.width = `${widths[index]}px`; });
+            table.style.width = `${total}px`;
+        };
+        const saveWidths = () => vscode.setState({ gridKey, widths });
+        if (widths.length !== headers.length || widths.some(width => width === null)) {
+            widths = fitWidths('content');
+        }
+        applyWidths();
+
+        const menu = document.createElement('div');
+        menu.className = 'column-menu';
+        menu.setAttribute('role', 'menu');
+        menu.hidden = true;
+        for (const [label, mode] of [
+            ['Fit all columns to headers', 'header'],
+            ['Fit each column to content', 'content']
+        ]) {
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.setAttribute('role', 'menuitem');
+            button.textContent = label;
+            button.addEventListener('click', () => {
+                widths = fitWidths(mode);
+                applyWidths();
+                saveWidths();
+                closeMenu();
+            });
+            menu.appendChild(button);
+        }
+        document.body.appendChild(menu);
+        let activeHeader = null;
+        function closeMenu() {
+            menu.hidden = true;
+            activeHeader?.setAttribute('aria-expanded', 'false');
+            activeHeader = null;
+        }
+        function openMenu(header) {
+            if (activeHeader === header && !menu.hidden) {
+                closeMenu();
+                return;
+            }
+            closeMenu();
+            activeHeader = header;
+            header.setAttribute('aria-expanded', 'true');
+            menu.hidden = false;
+            const rect = header.getBoundingClientRect();
+            menu.style.left = `${Math.max(0, Math.min(rect.left, innerWidth - menu.offsetWidth))}px`;
+            menu.style.top = `${Math.max(0, Math.min(rect.bottom, innerHeight - menu.offsetHeight))}px`;
+        }
+        document.addEventListener('pointerdown', event => {
+            if (!menu.contains(event.target) && !headers.includes(event.target)) closeMenu();
+        });
+        document.addEventListener('keydown', event => {
+            if (event.key === 'Escape' && !menu.hidden) {
+                const header = activeHeader;
+                closeMenu();
+                header?.focus();
+            }
+        });
+        headers.slice(1).forEach((header, offset) => {
+            const index = offset + 1;
+            header.tabIndex = 0;
+            header.setAttribute('role', 'button');
+            header.setAttribute('aria-haspopup', 'menu');
+            header.setAttribute('aria-expanded', 'false');
+            header.title = 'Click for column sizing options; drag the right edge to resize';
+            header.addEventListener('click', () => openMenu(header));
+            header.addEventListener('keydown', event => {
+                if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault();
+                    openMenu(header);
+                }
+            });
+            const handle = document.createElement('span');
+            handle.className = 'column-resize';
+            handle.setAttribute('aria-hidden', 'true');
+            handle.addEventListener('click', event => event.stopPropagation());
+            handle.addEventListener('pointerdown', event => {
+                event.stopPropagation();
+                event.preventDefault();
+                closeMenu();
+                const startX = event.clientX;
+                const startWidth = widths[index];
+                handle.setPointerCapture(event.pointerId);
+                const move = moveEvent => {
+                    widths[index] = Math.max(minColumnWidth, startWidth + moveEvent.clientX - startX);
+                    applyWidths();
+                };
+                const finish = () => {
+                    handle.removeEventListener('pointermove', move);
+                    handle.removeEventListener('pointerup', finish);
+                    handle.removeEventListener('pointercancel', finish);
+                    saveWidths();
+                };
+                handle.addEventListener('pointermove', move);
+                handle.addEventListener('pointerup', finish);
+                handle.addEventListener('pointercancel', finish);
+            });
+            header.appendChild(handle);
+        });
         document.getElementById('refresh-collection-btn')?.addEventListener('click', () => {
-            vscode.postMessage({ command: 'refreshCollection', collection: '{{COLLECTION_NAME_JSON}}' });
+            vscode.postMessage({ command: 'refreshCollection', collection: {{COLLECTION_NAME_LITERAL}} });
         });
 
         // Cell editing logic
@@ -171,7 +362,7 @@
                         // Send update message with _id
                         vscode.postMessage({
                             command: 'updateCell',
-                            collection: '{{COLLECTION_NAME_JSON}}',
+                            collection: {{COLLECTION_NAME_LITERAL}},
                             _id: td.getAttribute('data-id'),
                             column: td.getAttribute('data-col'),
                             value: newValue

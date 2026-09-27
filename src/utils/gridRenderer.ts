@@ -75,7 +75,7 @@ export function renderCollectionGrid(collectionName: string, result: QueryResult
 
     return getHtmlTemplate()
         .replace(/\{\{COLLECTION_NAME\}\}/g, escapeHtml(collectionName))
-        .replace(/\{\{COLLECTION_NAME_JSON\}\}/g, JSON.stringify(collectionName).slice(1, -1))
+        .replace(/\{\{COLLECTION_NAME_LITERAL\}\}/g, () => JSON.stringify(collectionName).replace(/</g, '\\u003c'))
         .replace(/\{\{TABLE_HEADER\}\}/g, header)
         .replace(/\{\{TABLE_ROWS\}\}/g, rows);
 }

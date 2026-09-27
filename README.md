@@ -15,6 +15,10 @@ the Save dialog to create an empty `.litedb` or `.db` file and open it.
    The view header shows the file name with its original case, for example,
    **LiteDB (test.litedb)**. Long names are shortened to fit the panel.
 2. Select a collection to view its documents. Use the refresh button to reload.
+   Columns initially fit their displayed content, up to a readable width. Drag
+   the right edge of a column header to resize it. Click a header to choose
+   **Fit all columns to headers** or **Fit each column to content**. These
+   controls also work in query results.
 3. Click a string, number, or boolean cell to edit it; press Enter to save or
    Escape to cancel. `_id`, BSON values, nulls, and nested values are read only.
    Click nested JSON or a JSON object/array stored as text to open it formatted

@@ -33,3 +33,13 @@ test('JSON text uses a short preview while ordinary text remains editable', () =
     assert.match(html, /data-col="plain"[^>]*>hello<\/td>/);
     assert.doesNotMatch(html, /<button[^>]*>\{&quot;message&quot;:.*x{200}/);
 });
+
+test('collection names are safe JavaScript values in the grid webview', () => {
+    const name = "O'Reilly </script>";
+    const html = renderCollectionGrid(name, { columns: ['name'], rows: [{ name: 'John' }] });
+    const script = html.match(/<script>([\s\S]*?)<\/script>/)?.[1];
+    assert.ok(script);
+    assert.doesNotMatch(script, /O'Reilly <\/script>/);
+    assert.doesNotThrow(() => new Function(script));
+    assert.match(script, /collection: "O'Reilly \\u003c\/script>"/);
+});
