@@ -63,20 +63,13 @@ export function getLiteDbIdExpression(id: unknown): string {
     try {
         const parsed = typeof id === 'string' ? JSON.parse(id) : id;
         if (parsed && typeof parsed === 'object' && '$oid' in parsed) {
+            if (!isValidObjectId(parsed.$oid)) throw new Error('Invalid ObjectId');
             return `ObjectId('${parsed.$oid}')`;
         }
+        if (typeof parsed === 'number' && Number.isFinite(parsed)) return String(parsed);
+        if (typeof parsed === 'string') return `'${escapeSqlString(parsed)}'`;
+        throw new Error('Unsupported document ID');
     } catch {
-        // Fall through to default handling
+        throw new Error('Invalid document ID');
     }
-    
-    // If it's a plain ObjectId string (24 hex chars), wrap it in ObjectId()
-    if (isValidObjectId(id)) {
-        return `ObjectId('${id}')`;
-    }
-    
-    if (typeof id === 'string') {
-        return isNaN(Number(id)) ? `'${escapeSqlString(id)}'` : id;
-    }
-    
-    return `'${escapeSqlString(String(id))}'`;
 }

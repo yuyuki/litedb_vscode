@@ -13,6 +13,7 @@ export class DotnetBridgeManager {
     private queue: BridgeQueueItem[] = [];
     private readonly dllPath: string;
     private restarting = false;
+    private restartHandle?: NodeJS.Timeout;
     private buffer = '';
     private currentResolve?: (value: any) => void;
     private currentReject?: (reason?: any) => void;
@@ -85,11 +86,16 @@ export class DotnetBridgeManager {
             this.currentReject = undefined;
         }
 
+        this.clearTimeout();
+        this.busy = false;
+        this.buffer = '';
+
         if (!this.restarting && !this.disposed) {
             this.restarting = true;
-            setTimeout(() => {
+            this.restartHandle = setTimeout(() => {
                 if (!this.disposed) {
                     this.launch();
+                    this.processQueue();
                 }
                 this.restarting = false;
             }, EXTENSION_CONSTANTS.BRIDGE_RESTART_DELAY);
@@ -98,6 +104,8 @@ export class DotnetBridgeManager {
 
     private handleError(error: Error): void {
         this.log(`Bridge process error: ${error.message}`, true);
+        // A failed spawn may never produce a usable stdout stream.
+        this.process?.kill();
     }
 
     private handleStdout(chunk: string): void {
@@ -127,15 +135,12 @@ export class DotnetBridgeManager {
         }
 
         // Clear timeout
-        if (this.timeoutHandle) {
-            clearTimeout(this.timeoutHandle);
-            this.timeoutHandle = undefined;
-        }
-
         try {
             const parsed = JSON.parse(line);
+            this.clearTimeout();
             this.currentResolve(parsed);
         } catch (error) {
+            this.clearTimeout();
             this.currentReject?.(new Error(`Failed to parse response: ${error}`));
         } finally {
             this.currentResolve = undefined;
@@ -174,13 +179,15 @@ export class DotnetBridgeManager {
 
         try {
             const payload = JSON.stringify(item.payload) + '\n';
-            this.process.stdin.write(payload, (error) => {
+            const process = this.process;
+            process.stdin.write(payload, (error) => {
                 if (error) {
+                    this.clearTimeout();
                     this.currentReject?.(error);
                     this.busy = false;
                     this.currentResolve = undefined;
                     this.currentReject = undefined;
-                    this.processQueue();
+                    process.kill();
                 }
             });
 
@@ -191,11 +198,14 @@ export class DotnetBridgeManager {
                     this.currentResolve = undefined;
                     this.currentReject = undefined;
                     this.busy = false;
-                    this.processQueue();
+                    // The backend may still return the timed out response. Restart it
+                    // before sending another request so replies cannot be misattributed.
+                    process.kill();
                 }
             }, EXTENSION_CONSTANTS.BRIDGE_RESPONSE_TIMEOUT);
             
         } catch (error) {
+            this.clearTimeout();
             item.reject(error);
             this.busy = false;
             this.currentResolve = undefined;
@@ -205,17 +215,25 @@ export class DotnetBridgeManager {
     }
 
     public async dispose(): Promise<void> {
-        this.disposed = true;
-        
-        // Send close command to gracefully close all databases
-        try {
-            if (this.process && !this.process.killed) {
-                await this.send({ command: 'close', dbPath: '', query: null });
-                // Give it more time to process the close command and delete log files
-                await new Promise(resolve => setTimeout(resolve, 500));
+        if (this.disposed) return;
+        // Give the bridge a bounded chance to checkpoint before terminating it.
+        if (this.process && !this.process.killed && !this.busy && this.queue.length === 0) {
+            let timer: NodeJS.Timeout | undefined;
+            try {
+                await Promise.race([
+                    this.send({ command: 'close', dbPath: '' }),
+                    new Promise<void>(resolve => { timer = setTimeout(resolve, 2000); })
+                ]);
+            } catch (error) {
+                this.log(`Error during graceful shutdown: ${error}`, true);
+            } finally {
+                if (timer) clearTimeout(timer);
             }
-        } catch (error) {
-            this.log(`Error during graceful shutdown: ${error}`, true);
+        }
+        this.disposed = true;
+
+        if (this.restartHandle) {
+            clearTimeout(this.restartHandle);
         }
         
         // Reject all pending requests
@@ -235,6 +253,13 @@ export class DotnetBridgeManager {
         if (DotnetBridgeManager.outputChannel) {
             DotnetBridgeManager.outputChannel.dispose();
             DotnetBridgeManager.outputChannel = null;
+        }
+    }
+
+    private clearTimeout(): void {
+        if (this.timeoutHandle) {
+            clearTimeout(this.timeoutHandle);
+            this.timeoutHandle = undefined;
         }
     }
 

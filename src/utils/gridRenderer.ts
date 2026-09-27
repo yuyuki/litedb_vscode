@@ -69,16 +69,7 @@ function renderRow(row: Record<string, unknown>, columns: string[], index: numbe
     let idValue = '';
     if (row['_id'] !== undefined) {
         const id = row['_id'];
-        if (typeof id === 'object' && id !== null && '$oid' in id) {
-            // Extract ObjectId from BSON format {$oid: "..."}
-            idValue = (id as any).$oid;
-        } else if (typeof id === 'string' && /^[a-fA-F0-9]{24}$/.test(id)) {
-            // Plain ObjectId string (24 hex characters)
-            idValue = id;
-        } else {
-            // Other types (string, number, etc.)
-            idValue = String(id);
-        }
+        idValue = JSON.stringify(id);
     }
 
     const cells = columns.map(col => {
@@ -86,6 +77,7 @@ function renderRow(row: Record<string, unknown>, columns: string[], index: numbe
         let type = 'string';
         let isReadonly = false;
         let displayValue: string;
+        let jsonValue: string | undefined;
 
         // Check if value is already in BSON format (object with special keys)
         if (typeof value === 'object' && value !== null) {
@@ -104,7 +96,9 @@ function renderRow(row: Record<string, unknown>, columns: string[], index: numbe
             } else {
                 // Other objects (nested documents, arrays)
                 type = 'object';
-                displayValue = JSON.stringify(value);
+                isReadonly = true;
+                jsonValue = JSON.stringify(value);
+                displayValue = `<button class="json-link" type="button" title="Open formatted JSON">${escapeHtml(jsonValue.length > 80 ? jsonValue.slice(0, 80) + '…' : jsonValue)}</button>`;
             }
         } else if (typeof value === 'number') {
             type = 'number';
@@ -112,6 +106,10 @@ function renderRow(row: Record<string, unknown>, columns: string[], index: numbe
         } else if (typeof value === 'boolean') {
             type = 'boolean';
             displayValue = String(value);
+        } else if (value === null || value === undefined) {
+            type = 'null';
+            isReadonly = true;
+            displayValue = '';
         } else {
             // Strings and other primitive types
             displayValue = escapeHtml(value);
@@ -125,8 +123,9 @@ function renderRow(row: Record<string, unknown>, columns: string[], index: numbe
         // Store the raw _id value in data-id for all cells in this row
         // This ensures update operations can target the correct document
         const readonlyAttr = isReadonly ? ' data-readonly="true"' : '';
+        const jsonAttr = jsonValue === undefined ? '' : ` data-json="${escapeHtml(jsonValue)}"`;
 
-        return `<td data-row="${index}" data-col="${escapeHtml(col)}" data-id="${escapeHtml(idValue)}" data-type="${type}"${readonlyAttr} tabindex="0">${displayValue}</td>`;
+        return `<td data-row="${index}" data-col="${escapeHtml(col)}" data-id="${escapeHtml(idValue)}" data-type="${type}"${readonlyAttr}${jsonAttr} tabindex="0">${displayValue}</td>`;
     }).join('');
 
     return `<tr><td class="row-number">${index + 1}</td>${cells}</tr>`;

@@ -1,59 +1,45 @@
-# LiteDB VS Code Extension
+# LiteDB Explorer for VS Code
 
-This is a Visual Studio Code extension for working with [LiteDB](https://www.litedb.org/) databases. It provides a graphical interface to open, browse, and query LiteDB files directly from VS Code.
+Open LiteDB databases, browse collections, run LiteDB SQL queries, and edit
+simple document fields in VS Code. The extension uses a local .NET 10 bridge;
+install the .NET runtime on the machine running the extension.
 
-## Features
+## Use
 
-- Open and explore LiteDB databases (*.db files)
-- View collections and documents in a tree view
-- Run SQL-like queries and view results
-- Edit documents in a grid view
-- IntelliSense for LiteDB queries
-- Refresh collections and data
-- Error handling and helpful messages
+1. Run **LiteDB: Open Database** from the Command Palette or the LiteDB view
+   in Explorer, then select a `.db` or `.litedb` file.
+2. Select a collection to view its documents. Use the refresh button to reload.
+3. Click a string, number, or boolean cell to edit it; press Enter to save or
+   Escape to cancel. `_id`, BSON values, nulls, and nested values are read only.
+   Click nested JSON to open it formatted in an editor.
+4. Run **LiteDB: Run Query** to create a query editor. Press F5 to execute its
+   selected text, or the whole document when nothing is selected. Results
+   appear in the LiteDB Result panel.
+5. Run **LiteDB: Close Database** when finished.
 
-# Screenshots
+The query editor offers keyword and collection completion. Reload external
+database changes with **LiteDB: Refresh Collections**.
 
-## List Commands
-![List Commands](images/list_commands.gif)
+![Open database](images/open_db.gif)
+![Browse and edit](images/open_and_edit_collection.gif)
+![Query editor](images/query_editor.gif)
 
-## Open DB collections
-![Open DB collections](images/open_db.gif)
+## Develop
 
-## Open and Edit Collection
-![Open and Edit Collection](images/open_and_edit_collection.gif)
+Requirements: Node.js, npm, .NET 10 SDK, and VS Code.
 
-## Query Editor
-![Query Editor](images/query_editor.gif)
+```sh
+npm install
+npm run compile
+dotnet build backend/LiteDbBridge/LiteDbBridge.csproj
+```
 
-## Getting Started
-
-1. **Build the extension:**
-   - Run `npm install` to install dependencies
-   - Run `npm run compile` to build the TypeScript code
-2. **Build the backend:**
-   - `cd backend/LiteDbBridge`
-   - Run `dotnet build` to build the C# backend
-3. **Launch the extension:**
-   - Press `F5` in VS Code to open a new Extension Development Host
-
-## Project Structure
-
-- `src/` — TypeScript source code for the extension
-- `backend/LiteDbBridge/` — C# backend for database operations
-- `media/` — HTML files for result and grid views
-- `themes/` — VS Code theme files
-- `unitTest/` — Test files for grammar and features
-
-## Development
-
-- To test grammar: `npx vscode-tmgrammar-test -g ./litedb.tmLanguage.json ./unitTest/grammar.test.litedb`
-- To package the extension: `npx vsce package`
-
-## Contributing
-
-Pull requests and issues are welcome! Please open an issue for bugs or feature requests.
+The backend project builds into `out/LiteDbBridge/`, where the extension
+expects `LiteDbBridge.dll`. Press F5 in VS Code to launch an Extension
+Development Host. TypeScript source is in `src/`, the bridge is in
+`backend/LiteDbBridge/`, and the collection webview is in `media/gridView.html`.
+See [AGENTS.md](AGENTS.md) for development invariants.
 
 ## License
 
-This project is licensed under the MIT License.
+MIT. See [LICENSE.md](LICENSE.md).

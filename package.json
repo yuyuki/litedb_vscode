@@ -2,7 +2,7 @@
   "name": "litedb-vscode",
   "displayName": "LiteDB Explorer",
   "description": "Open LiteDB files, browse collections, and run queries from VS Code.",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "publisher": "JaufrDevosse",
   "icon": "images/logo_litedb.png",
   "engines": {
@@ -129,6 +129,7 @@
   },
   "scripts": {
     "compile": "tsc -p ./",
+    "test": "npm run compile && node --test unitTest/*.test.js",
     "watch": "tsc -watch -p ./",
     "vscode:prepublish": "npm run compile"
   },

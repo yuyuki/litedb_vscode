@@ -84,7 +84,10 @@ public static class Program
                     ExecuteQuery(request);
                     break;
                 case "close":
-                    CloseAllDatabases();
+                    if (string.IsNullOrWhiteSpace(request.DbPath))
+                        CloseAllDatabases();
+                    else if (_dbCache.Remove(request.DbPath, out var database))
+                        CloseDatabase(request.DbPath, database);
                     WriteResponse(new BridgeResponse(true, Data: "Databases closed"));
                     break;
                 default:
@@ -144,41 +147,8 @@ public static class Program
             db.Dispose();
             LogInfo($"Closed database: {path}");
 
-            // Wait a moment to ensure file handles are released
-            Thread.Sleep(100);
-
-            // Delete corresponding -log.litedb file if it exists
-            try
-            {
-                var dbDir = Path.GetDirectoryName(path);
-                var dbFile = Path.GetFileNameWithoutExtension(path);
-                var logFile = Path.Combine(dbDir ?? string.Empty, $"{dbFile}-log.litedb");
-                
-                if (File.Exists(logFile))
-                {
-                    // Retry deletion a few times in case of file locks
-                    int retries = 3;
-                    while (retries > 0)
-                    {
-                        try
-                        {
-                            File.Delete(logFile);
-                            LogInfo($"Deleted log file: {logFile}");
-                            break;
-                        }
-                        catch (IOException) when (retries > 1)
-                        {
-                            LogInfo($"Retrying log file deletion for {logFile}, attempts remaining: {retries - 1}");
-                            Thread.Sleep(100);
-                            retries--;
-                        }
-                    }
-                }
-            }
-            catch (Exception logEx)
-            {
-                LogError($"Error deleting log file for {path}: {logEx.Message}");
-            }
+            // LiteDB owns its log files. Never remove them manually: another
+            // process may still be using this database in shared mode.
         }
         catch (Exception ex)
         {
