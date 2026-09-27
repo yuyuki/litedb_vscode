@@ -6,6 +6,9 @@
 
 - Prepare the next release of LiteDB Explorer with the current 1.1.0 package
   version and release metadata.
+- Show the open database file name in the LiteDB Explorer view title.
+- Preserve the file name's case and truncate it with an ellipsis when the view
+  header is too narrow.
 
 ### Fixed
 

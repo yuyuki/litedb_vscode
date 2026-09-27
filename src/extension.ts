@@ -25,6 +25,9 @@ export function activate(context: vscode.ExtensionContext): void {
     // Initialize state and providers
     const state = new LiteDbState();
     const collectionsProvider = new LiteDbCollectionsProvider(state, liteDbService);
+    const collectionsView = vscode.window.createTreeView(VIEW_IDS.EXPLORER, {
+        treeDataProvider: collectionsProvider
+    });
     const resultViewProvider = new LiteDbResultViewProvider(context.extensionPath);
 
     // Initialize completion provider
@@ -43,7 +46,12 @@ export function activate(context: vscode.ExtensionContext): void {
     // Register providers
     context.subscriptions.push(
         vscode.languages.registerCompletionItemProvider('litedb', completionProvider, ' '),
-        vscode.window.registerTreeDataProvider(VIEW_IDS.EXPLORER, collectionsProvider),
+        collectionsView,
+        collectionsProvider.onDidChangeTreeData(() => {
+            collectionsView.description = state.dbPath
+                ? `(${path.basename(state.dbPath)})`
+                : undefined;
+        }),
         vscode.window.registerWebviewViewProvider(VIEW_IDS.RESULT_VIEW, resultViewProvider)
     );
 

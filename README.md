@@ -12,6 +12,8 @@ the Save dialog to create an empty `.litedb` or `.db` file and open it.
 
 1. Run **LiteDB: Open Database** from the Command Palette or the LiteDB view
    in Explorer, then select a `.db` or `.litedb` file.
+   The view header shows the file name with its original case, for example,
+   **LiteDB (test.litedb)**. Long names are shortened to fit the panel.
 2. Select a collection to view its documents. Use the refresh button to reload.
 3. Click a string, number, or boolean cell to edit it; press Enter to save or
    Escape to cancel. `_id`, BSON values, nulls, and nested values are read only.
