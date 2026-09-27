@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.1.0 — 2026-09-27
+
+### Added
+
+- Prepare the next release of LiteDB Explorer with the current 1.1.0 package
+  version and release metadata.
+
+### Fixed
+
+- Keep the extension version and changelog aligned for the next published
+  release.
+
 ## 1.0.1 — 2026-09-27
 
 ### Added
