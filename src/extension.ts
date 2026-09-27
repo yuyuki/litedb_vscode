@@ -317,12 +317,23 @@ async function openCollection(
 
     // Handle webview messages
     panel.webview.onDidReceiveMessage(async (msg) => {
-        if (msg.command === 'refreshCollection' && msg.collection === collection.name) {
+        if (msg.command === 'openJson' && typeof msg.value === 'string') {
+            await resultViewProviderForJson(msg.value);
+        } else if (msg.command === 'refreshCollection' && msg.collection === collection.name) {
             await refreshCollectionView(state.dbPath!, collection.name, panel);
         } else if (msg.command === 'updateCell' && msg.collection === collection.name) {
             await updateCell(state.dbPath!, collection.name, msg, panel);
         }
     });
+}
+
+async function resultViewProviderForJson(value: string): Promise<void> {
+    try {
+        const document = await vscode.workspace.openTextDocument({ language: 'json', content: JSON.stringify(JSON.parse(value), null, 2) });
+        await vscode.window.showTextDocument(document, { preview: true });
+    } catch {
+        vscode.window.showErrorMessage('Unable to open JSON value.');
+    }
 }
 
 async function refreshCollectionView(
@@ -351,13 +362,24 @@ async function updateCell(
     panel: vscode.WebviewPanel
 ): Promise<void> {
     const { column, value, _id } = msg;
+    if (typeof column !== 'string' || !/^[a-zA-Z_][\w]*$/.test(column) ||
+        !(typeof value === 'string' || typeof value === 'boolean' || (typeof value === 'number' && Number.isFinite(value)))) {
+        vscode.window.showErrorMessage('Update failed: invalid column or value.');
+        return;
+    }
     
     // Build UPDATE query with proper escaping
     const valueExpr = typeof value === 'string' 
         ? `'${escapeSqlString(value)}'` 
         : value;
 
-    const idExpr = getLiteDbIdExpression(_id);
+    let idExpr: string;
+    try {
+        idExpr = getLiteDbIdExpression(_id);
+    } catch {
+        vscode.window.showErrorMessage('Update failed: invalid document ID.');
+        return;
+    }
     const updateQuery = `UPDATE ${collectionName} SET ${column} = ${valueExpr} WHERE _id = ${idExpr}`;
 
     const updateResp = await liteDbService!.executeQuery(dbPath, updateQuery);

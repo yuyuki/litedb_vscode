@@ -23,6 +23,11 @@ export class LiteDbResultViewProvider implements vscode.WebviewViewProvider {
             localResourceRoots: [vscode.Uri.file(path.join(this.extensionPath, 'media'))]
         };
         webviewView.webview.html = this._currentHtml;
+        webviewView.webview.onDidReceiveMessage(async msg => {
+            if (msg.command === 'openJson' && typeof msg.value === 'string') {
+                await this.openJson(msg.value);
+            }
+        });
     }
 
     showResult(title: string, result: QueryResult): void {
@@ -40,6 +45,16 @@ export class LiteDbResultViewProvider implements vscode.WebviewViewProvider {
     clearView(): void {
         this._currentHtml = this.getEmptyHtml();
         this.updateView();
+    }
+
+    async openJson(value: string): Promise<void> {
+        try {
+            const formatted = JSON.stringify(JSON.parse(value), null, 2);
+            const document = await vscode.workspace.openTextDocument({ language: 'json', content: formatted });
+            await vscode.window.showTextDocument(document, { preview: true });
+        } catch {
+            vscode.window.showErrorMessage('Unable to open JSON value.');
+        }
     }
 
     private updateView(): void {

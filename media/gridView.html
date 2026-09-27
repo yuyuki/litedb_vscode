@@ -94,6 +94,7 @@
             cursor: not-allowed;
             opacity: 0.8;
         }
+        .json-link { color: var(--vscode-textLink-foreground); background: none; border: 0; cursor: pointer; font: inherit; padding: 0; }
     </style>
 </head>
 
@@ -125,6 +126,10 @@
         // Cell editing logic
         document.querySelectorAll('td[data-row][data-col]').forEach(td => {
             td.addEventListener('click', function (e) {
+                if (td.dataset.json) {
+                    vscode.postMessage({ command: 'openJson', value: td.dataset.json });
+                    return;
+                }
                 // Don't allow editing of _id column
                 if (td.getAttribute('data-readonly') === 'true') return;
                 if (td.querySelector('input')) return; // already editing
@@ -145,17 +150,20 @@
                     if (ev.key === 'Enter') {
                         let newValue = input.value;
                         // Type-preserving conversion
-                        if (dataType === 'number' && newValue !== '' && !isNaN(Number(newValue))) {
+                        if (dataType === 'number' && newValue !== '' && Number.isFinite(Number(newValue))) {
                             newValue = Number(newValue);
-                        } else if (dataType === 'bson') {
-                            newValue = { $oid: newValue };
-                        } else if (dataType === 'guid') {
-                            // Optionally validate GUID format here
-                            newValue = newValue;
-                        } else if (dataType === 'date') {
-                            // Send as ISO string (LiteDB will interpret as DateTime)
-                            newValue = newValue;
+                        } else if (dataType === 'number') {
+                            input.setCustomValidity('Enter a valid number');
+                            input.reportValidity();
+                            return;
+                        } else if (dataType === 'boolean' && /^(true|false)$/i.test(newValue)) {
+                            newValue = newValue.toLowerCase() === 'true';
+                        } else if (dataType === 'boolean') {
+                            input.setCustomValidity('Enter true or false');
+                            input.reportValidity();
+                            return;
                         }
+                        input.remove();
                         td.textContent = input.value;
                         // Send update message with _id
                         vscode.postMessage({
@@ -172,7 +180,7 @@
 
                 // Blur restores value
                 input.addEventListener('blur', function () {
-                    td.textContent = input.value;
+                    if (td.contains(input)) td.textContent = oldValue;
                 });
             });
         });
